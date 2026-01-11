@@ -1,0 +1,62 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+secrets.json
+credentials.json
+*.pem
+*.key
+*.crt
+
+# AWS
+.aws/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test
+.coverage
+.pytest_cache/
+.mypy_cache/
+
+# Streamlit
+.streamlit/
+
+# AgentCore generated
+.bedrock_agentcore.yaml
+agentcore_config.json
+memory_id.txt
+gateway_id.txt
+runtime_id.txt
+
+# Lambda zip files
+*.zip
+
+# Temp
+*.tmp
+*.bak

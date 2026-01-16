@@ -80,6 +80,22 @@ Amazon Bedrock AgentCore를 활용한 한국 패션/뷰티 이커머스 고객 �
 └─────────────┘    └─────────────┘    └─────────────┘
 ```
 
+## Prerequisites
+
+### 시스템 요구사항
+- Python 3.12+
+- AWS CLI 설치 및 구성
+- UV 패키지 매니저 (자동 설치됨)
+
+### AWS IAM 권한
+
+| 스크립트 | 필요 권한 |
+|----------|-----------|
+| `setup_aws.sh` | `sts:GetCallerIdentity`, `ssm:GetParameter`, `s3:ListBuckets`, `cloudformation:ListStacks` |
+| `deploy.sh` | `cloudformation:*`, `iam:*`, `s3:*`, `lambda:*`, `dynamodb:*`, `ssm:*`, `cognito-idp:*` |
+
+> **권장**: `AdministratorAccess` 또는 위 권한을 포함하는 IAM 정책 사용
+
 ## Quick Start
 
 ```bash

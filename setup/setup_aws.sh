@@ -76,7 +76,6 @@ echo ""
 echo "🛡️ 필수 AWS 서비스 권한 확인 중..."
 
 services_check=(
-    "bedrock:ListFoundationModels"
     "ssm:GetParameter"
     "sts:GetCallerIdentity"
     "s3:ListBuckets"
@@ -90,16 +89,8 @@ for service_action in "${services_check[@]}"; do
     action=$(echo $service_action | cut -d':' -f2)
     
     case $service in
-        "bedrock")
-            if aws bedrock list-foundation-models --region $REGION >/dev/null 2>&1; then
-                echo "✅ $service_action"
-            else
-                echo "❌ $service_action"
-                failed_services+=("$service_action")
-            fi
-            ;;
         "ssm")
-            if aws ssm get-parameters-by-path --path "/aws" --region $REGION >/dev/null 2>&1; then
+            if aws ssm get-parameters-by-path --path "/app/ecommerce" --region $REGION >/dev/null 2>&1; then
                 echo "✅ $service_action"
             else
                 echo "❌ $service_action"
@@ -141,41 +132,10 @@ if [ ${#failed_services[@]} -ne 0 ]; then
     done
     echo ""
     echo "💡 필요한 IAM 권한:"
-    echo "   • BedrockFullAccess (또는 BedrockInvokeModel)"
     echo "   • SSMReadOnlyAccess"
-    echo "   • CloudFormationReadOnlyAccess"
+    echo "   • CloudFormationFullAccess"
     echo "   • S3ReadOnlyAccess"
     echo ""
-fi
-
-# ----- Bedrock 모델 액세스 확인 -----
-echo ""
-echo "🤖 Bedrock 모델 액세스 확인 중..."
-if aws bedrock list-foundation-models --region $REGION >/dev/null 2>&1; then
-    # Claude 모델 확인
-    claude_models=$(aws bedrock list-foundation-models \
-        --region $REGION \
-        --query "modelSummaries[?contains(modelName, 'Claude') || contains(modelId, 'claude')].[modelId,modelName]" \
-        --output text 2>/dev/null | head -5)
-    
-    if [ ! -z "$claude_models" ]; then
-        echo "✅ Bedrock 모델 액세스 가능"
-        echo "   사용 가능한 Claude 모델 (일부):"
-        echo "$claude_models" | while read -r model_id model_name; do
-            echo "   • $model_id"
-        done
-        
-        # 권장 모델 확인
-        if echo "$claude_models" | grep -q "claude-3"; then
-            echo "✅ Claude 3 모델 사용 가능 (권장)"
-        else
-            echo "⚠️ Claude 3 모델을 찾을 수 없습니다. 모델 액세스를 확인하세요."
-        fi
-    else
-        echo "⚠️ Claude 모델을 찾을 수 없습니다."
-    fi
-else
-    echo "❌ Bedrock 서비스에 액세스할 수 없습니다."
 fi
 
 # ----- 기존 리소스 확인 -----
@@ -228,17 +188,12 @@ fi
 
 echo ""
 echo "🚀 다음 단계:"
-echo "   1. 가상환경 설정:"
-echo "      ./setup/create_kstyle_env.sh"
+echo "   1. 인프라 배포 (CloudFormation):"
+echo "      ./infra/scripts/deploy.sh"
 echo ""
-echo "   2. 인프라 구성 (필요시):"
-echo "      ./scripts/prereq.sh"
-echo ""
-echo "   3. 리소스 상태 확인:"
-echo "      ./scripts/list_ssm_parameters.sh"
-echo ""
-echo "   4. 애플리케이션 실행:"
-echo "      streamlit run streamlit_app.py"
+echo "   2. 노트북 실행:"
+echo "      notebooks/lab-01-create-ecommerce-agent.ipynb 열기"
+echo "      커널 선택: ecommerce-agent"
 echo ""
 
 if [ ${#failed_services[@]} -ne 0 ]; then

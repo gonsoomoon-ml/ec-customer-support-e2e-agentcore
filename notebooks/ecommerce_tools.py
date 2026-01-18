@@ -1,8 +1,16 @@
+"""
+이커머스 고객 지원 에이전트 도구 및 설정
+"""
 from strands.tools import tool
 
-ECOMMERCE_MODEL_ID = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+# ============================================================
+# 모델 설정
+# ============================================================
+ECOMMERCE_MODEL_ID = "us.anthropic.claude-sonnet-4-20250514-v1:0"
 
-# System prompt defining the agent's role and capabilities
+# ============================================================
+# 시스템 프롬프트
+# ============================================================
 ECOMMERCE_SYSTEM_PROMPT = """당신은 한국 이커머스 쇼핑몰 K-Style의 고객 지원 전문가입니다.
 
 당신의 역할은:
@@ -14,12 +22,15 @@ ECOMMERCE_SYSTEM_PROMPT = """당신은 한국 이커머스 쇼핑몰 K-Style의 
 
 사용 가능한 도구:
 1. check_return_eligibility() - 반품 자격 확인
-2. process_return_request() - 반품 요청 처리  
+2. process_return_request() - 반품 요청 처리
 3. get_product_recommendations() - 상품 추천
 
 항상 정중하고 친근한 톤으로 응답하며, 고객의 문제를 해결하는 데 최선을 다해주세요."""
 
 
+# ============================================================
+# 도구 정의
+# ============================================================
 @tool
 def check_return_eligibility(order_number: str, item_name: str) -> str:
     """
@@ -32,7 +43,6 @@ def check_return_eligibility(order_number: str, item_name: str) -> str:
     Returns:
         반품 자격 여부와 조건에 대한 정보
     """
-    # 실제 구현에서는 주문 데이터베이스를 조회
     return_policies = {
         "패션": {
             "window": "14일",
@@ -42,7 +52,7 @@ def check_return_eligibility(order_number: str, item_name: str) -> str:
             "shipping": "무료 반품 (단순 변심 시 고객 부담)"
         },
         "뷰티": {
-            "window": "7일", 
+            "window": "7일",
             "condition": "미개봉 상품만 가능, 개인위생상 개봉 후 반품 불가",
             "process": "고객센터 문의 필수",
             "refund_time": "상품 회수 후 3-5 영업일",
@@ -50,13 +60,12 @@ def check_return_eligibility(order_number: str, item_name: str) -> str:
         }
     }
 
-    # 상품 카테고리 추정
     category = "패션"
     if any(keyword in item_name for keyword in ["립스틱", "파운데이션", "쿠션", "크림", "로션"]):
         category = "뷰티"
 
     policy = return_policies.get(category, return_policies["패션"])
-    
+
     return f"반품 정책 - {item_name}:\n\n" \
            f"• 반품 기간: 배송 완료일로부터 {policy['window']}\n" \
            f"• 반품 조건: {policy['condition']}\n" \
@@ -78,9 +87,8 @@ def process_return_request(order_number: str, reason: str) -> str:
     Returns:
         반품 처리 상태 및 다음 단계 안내
     """
-    # 실제 구현에서는 반품 시스템에 요청을 등록
     tracking_number = f"RET-{order_number[-6:]}"
-    
+
     return f"반품 요청이 접수되었습니다.\n\n" \
            f"• 반품 번호: {tracking_number}\n" \
            f"• 주문번호: {order_number}\n" \
@@ -105,7 +113,6 @@ def get_product_recommendations(category: str, budget: str = "상관없음") -> 
     Returns:
         추천 상품 목록과 상세 정보
     """
-    # 실제 구현에서는 상품 데이터베이스에서 조회
     recommendations = {
         "패션": [
             {"name": "플라워 패턴 원피스", "price": "89,000원", "rating": "4.8/5", "feature": "봄 신상, 무료배송"},
@@ -124,17 +131,16 @@ def get_product_recommendations(category: str, budget: str = "상관없음") -> 
         ]
     }
 
-    # 카테고리별 추천 상품 찾기
     products = recommendations.get(category, recommendations.get("패션", []))
-    
+
     result = f"🛍️ {category} 카테고리 추천 상품:\n\n"
     for i, product in enumerate(products, 1):
         result += f"{i}. {product['name']}\n"
         result += f"   💰 가격: {product['price']}\n"
         result += f"   ⭐ 평점: {product['rating']}\n"
         result += f"   ✨ 특징: {product['feature']}\n\n"
-    
+
     result += "💝 지금 주문하시면 무료배송이며, 14일 이내 무료 반품이 가능합니다.\n"
     result += "더 자세한 상품 정보나 다른 카테고리 추천이 필요하시면 말씀해 주세요!"
-    
+
     return result

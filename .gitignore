@@ -53,6 +53,10 @@ agentcore_config.json
 memory_id.txt
 gateway_id.txt
 runtime_id.txt
+.test_config.json
+
+# UV lock file
+uv.lock
 
 # Lambda zip files
 *.zip

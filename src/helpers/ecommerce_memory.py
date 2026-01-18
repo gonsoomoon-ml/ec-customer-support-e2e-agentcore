@@ -45,7 +45,7 @@ class EcommerceCustomerMemoryHooks(HookProvider):
                         query=user_query,
                         top_k=3,
                     )
-                    
+
                     # 메모리를 맥락 문자열로 포맷
                     for memory in memories:
                         if isinstance(memory, dict):
@@ -61,13 +61,13 @@ class EcommerceCustomerMemoryHooks(HookProvider):
                 if all_context:
                     context_text = "\\n".join(all_context)
                     original_text = messages[-1]["content"][0]["text"]
-                    
+
                     # 한국어로 맥락 정보 제공
                     messages[-1]["content"][0]["text"] = f"""고객 정보:
 {context_text}
 
 고객 문의: {original_text}"""
-                    
+
                     logger.info(f"고객 맥락 {len(all_context)}개 항목 검색 완료")
 
             except Exception as e:
@@ -149,14 +149,17 @@ def create_or_get_ecommerce_memory_resource():
     """이커머스 전용 메모리 리소스를 생성하거나 가져옵니다."""
     import boto3
     from bedrock_agentcore.memory.constants import StrategyType
-    from lab_helpers.utils import get_ssm_parameter, put_ssm_parameter
-    
+    try:
+        from helpers.utils import get_ssm_parameter, put_ssm_parameter
+    except ImportError:
+        from src.helpers.utils import get_ssm_parameter, put_ssm_parameter
+
     session = boto3.session.Session()
     region = session.region_name
-    
+
     memory_client = MemoryClient(region_name=region)
     memory_name = "EcommerceCustomerMemory"
-    
+
     try:
         # 기존 메모리 ID 확인
         memory_id = get_ssm_parameter("/app/ecommerce/agentcore/memory_id")
@@ -175,15 +178,15 @@ def create_or_get_ecommerce_memory_resource():
                 },
                 {
                     StrategyType.SEMANTIC.value: {
-                        "name": "EcommerceCustomerHistory", 
+                        "name": "EcommerceCustomerHistory",
                         "description": "고객의 구매 이력, 반품/교환 내역, 문의 사항 저장",
                         "namespaces": ["ecommerce/customer/{actorId}/history"],
                     }
                 },
             ]
-            
+
             print("이커머스 AgentCore Memory 리소스 생성 중... 몇 분 소요될 수 있습니다.")
-            
+
             # 이커머스 메모리 리소스 생성
             response = memory_client.create_memory_and_wait(
                 name=memory_name,
@@ -191,20 +194,20 @@ def create_or_get_ecommerce_memory_resource():
                 strategies=strategies,
                 event_expiry_days=90,  # 메모리는 90일 후 만료
             )
-            
+
             memory_id = response["id"]
-            
+
             try:
                 put_ssm_parameter(
-                    "/app/ecommerce/agentcore/memory_id", 
+                    "/app/ecommerce/agentcore/memory_id",
                     memory_id,
                     "이커머스 고객 메모리 ID"
                 )
             except:
                 pass
-            
+
             return memory_id
-            
+
         except Exception as e:
             print(f"메모리 리소스 생성 실패: {e}")
             return None
@@ -213,25 +216,25 @@ def create_or_get_ecommerce_memory_resource():
 # 이커머스 특화 메모리 시드 데이터
 def seed_ecommerce_customer_data(memory_client: MemoryClient, memory_id: str, customer_id: str):
     """이커머스 고객 테스트 데이터를 시드합니다."""
-    
+
     # 한국 패션/뷰티 고객 상호작용 예시
     ecommerce_interactions = [
         ("지난달에 산 원피스 사이즈가 작아서 L로 교환했어요.", "USER"),
         ("사이즈 교환 처리해드렸습니다. 플라워 패턴이 잘 어울리실 것 같아요!", "ASSISTANT"),
-        
-        ("제가 건성 피부인데 어떤 파운데이션이 좋을까요?", "USER"), 
+
+        ("제가 건성 피부인데 어떤 파운데이션이 좋을까요?", "USER"),
         ("건성 피부에는 보습 쿠션이나 글로우 타입을 추천드립니다. 히알루론산 성분이 들어간 제품이 좋아요.", "ASSISTANT"),
-        
+
         ("평소에 M 사이즈 입는데 이 브랜드는 어떤가요?", "USER"),
         ("해당 브랜드는 사이즈가 작게 나오는 편이니 L 사이즈를 추천드립니다. 실측 사이즈를 확인해보세요.", "ASSISTANT"),
-        
+
         ("베이지색 가방이 마음에 들어요. 어떤 옷과 잘 어울릴까요?", "USER"),
         ("베이지는 정말 활용도가 높은 색상이에요! 화이트, 네이비, 블랙 등 어떤 색과도 잘 어울립니다.", "ASSISTANT"),
-        
+
         ("이 립스틱 색깔이 사진과 달라요. 교환 가능한가요?", "USER"),
         ("색상 차이로 인한 교환은 무료로 처리됩니다. 원하시는 색상으로 바로 교환해드릴게요!", "ASSISTANT"),
     ]
-    
+
     # 이전 상호작용 저장
     try:
         memory_client.create_event(

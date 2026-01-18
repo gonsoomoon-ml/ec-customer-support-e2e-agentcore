@@ -6,128 +6,69 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-K-Style E-Commerce AI Customer Support Platform - a Korean fashion/beauty e-commerce platform using Amazon Bedrock AgentCore with Strands Agents framework. The primary completed use case is customer support (returns, exchanges, styling advice).
+K-Style E-Commerce AI Customer Support Platform - Korean fashion/beauty e-commerce using Amazon Bedrock AgentCore with Strands Agents. Handles returns, exchanges, and styling advice.
 
 ## Common Commands
 
-### Environment Setup
 ```bash
-# Create virtual environment with Python 3.11 or 3.12
-./infra/scripts/setup_env.sh
+# Environment (requires Python 3.12+)
+./setup/setup_env.sh && source .venv/bin/activate
+./setup/setup_aws.sh  # Verify AWS credentials
 
-# Activate virtual environment
-source .venv/bin/activate
+# Deploy infrastructure
+./setup/deploy_infra.sh
 
-# Verify AWS credentials
-./infra/scripts/setup_aws.sh
-```
-
-### Infrastructure
-```bash
-# Deploy CloudFormation stacks (S3, Lambda, DynamoDB, Cognito, IAM)
-./infra/scripts/deploy.sh
-
-# List deployed SSM parameters
-./infra/scripts/list_ssm_parameters.sh
-
-# Clean up all AWS resources (interactive prompts)
-./infra/scripts/cleanup.sh
-```
-
-### Running the Application
-```bash
-# Streamlit customer support UI
+# Run Streamlit UI
 streamlit run src/ui/streamlit_app.py
 
-# Or use quick-start wrapper
-./infra/scripts/run_streamlit.sh
-
-# Jupyter Lab for tutorials
+# Run tutorials
 jupyter lab notebooks/
-```
 
-### Package Management
-```bash
-# Sync dependencies using UV
+# Package management (UV)
 uv sync
-
-# Add new package
 uv add <package-name>
+
+# Cleanup
+./setup/cleanup_infra.sh
 ```
 
 ## Architecture
 
-### Technology Stack
-- **Agent Framework**: Strands Agents with tool decorators (`@tool`)
-- **LLM**: Amazon Bedrock (Claude 3.7 Sonnet: `us.anthropic.claude-3-7-sonnet-20250219-v1:0`)
-- **AgentCore Services**: Memory (customer data persistence), Gateway (Lambda tools), Runtime (containerized deployment), Identity (Cognito JWT)
-- **UI**: Streamlit with Plotly visualizations
-- **Package Manager**: UV with pyproject.toml
-
-### Directory Structure
-```
-ec-customer-support-e2e-agentcore/
-├── README.md
-├── CLAUDE.md
-├── src/                          # Python source code
-│   ├── agent.py                  # Main agent with tools
-│   ├── tools/                    # Tool modules
-│   │   ├── return_tools.py
-│   │   ├── exchange_tools.py
-│   │   └── search_tools.py
-│   ├── helpers/                  # Utility modules
-│   │   ├── utils.py
-│   │   ├── ecommerce_memory.py
-│   │   └── cleanup_iam.py
-│   └── ui/
-│       └── streamlit_app.py      # Customer portal
-├── notebooks/                    # Jupyter tutorials
-│   ├── lab-01 to lab-06
-│   └── .bedrock_agentcore.yaml
-├── infra/                        # Infrastructure
-│   ├── cloudformation/
-│   │   ├── infrastructure.yaml
-│   │   └── cognito.yaml
-│   ├── lambda/                   # Lambda function code
-│   └── scripts/                  # Shell scripts
-│       ├── deploy.sh
-│       ├── cleanup.sh
-│       ├── setup_env.sh
-│       └── run_streamlit.sh
-├── docs/                         # Documentation
-│   ├── ARCHITECTURE.md
-│   ├── AWS_SETUP_GUIDE.md
-│   └── TROUBLESHOOTING.md
-└── setup/                        # Package config
-    └── pyproject.toml
-```
-
-### CloudFormation Stacks
-Two stacks are deployed:
-1. `EcommerceCustomerSupportStackInfra` - S3, Lambda, DynamoDB, IAM roles, SSM parameters
-2. `EcommerceCustomerSupportStackCognito` - Cognito User Pool and clients
-
-### SSM Parameter Namespace
-All configuration stored under `/app/ecommerce/agentcore/`:
-- cognito_* (auth configuration)
-- gateway_iam_role, runtime_iam_role
-- lambda_arn, userpool_id, etc.
+- **LLM**: `us.anthropic.claude-3-7-sonnet-20250219-v1:0`
+- **Agent Framework**: Strands Agents (`@tool` decorator)
+- **AgentCore Services**: Memory, Gateway, Runtime, Identity (Cognito)
+- **UI**: Streamlit
+- **Infrastructure**: CloudFormation (`EcommerceCustomerSupportStackInfra`, `EcommerceCustomerSupportStackCognito`)
+- **Config**: SSM parameters under `/app/ecommerce/agentcore/`
 
 ## Code Patterns
 
-### Agent Tool Definition
+### Agent Creation
+```python
+# From project root or notebooks
+from agent import create_ecommerce_agent
+agent = create_ecommerce_agent()
+response = agent("반품하고 싶어요")
+```
+
+### Tool Definition
 ```python
 from strands.tools import tool
 
 @tool
 def tool_name(param: str) -> str:
     """Tool description for the agent."""
-    # Implementation
     return result
 ```
 
-### Memory Hooks
-Customer memory integration uses `EcommerceCustomerMemoryHooks` class in `src/helpers/ecommerce_memory.py`.
+### Key Files
+- `src/agent.py` - Standalone agent with inline tools for testing
+- `src/tools/` - Modular tools used by Streamlit UI
+- `src/helpers/ecommerce_memory.py` - `EcommerceCustomerMemoryHooks` for customer memory
+- `src/helpers/utils.py` - SSM, Cognito, IAM utilities
+- `notebooks/lab-01` to `lab-06` - Step-by-step tutorials
 
-## Documentation Language
-All primary documentation in `docs/` is in Korean, targeting Korean learners.
+## Notes
+- Documentation in `docs/` is in Korean
+- Notebooks import helpers as `lab_helpers` (aliased from `src/helpers`)
+- All dependencies should use `setup/pyproject.toml` and `uv sync` - do not use pip directly

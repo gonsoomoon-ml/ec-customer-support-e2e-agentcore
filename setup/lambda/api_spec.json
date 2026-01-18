@@ -1,0 +1,20 @@
+[
+    {
+        "name": "check_return_eligibility",
+        "description": "패션/뷰티 상품의 반품 자격을 자동으로 검증합니다. 주문일, 배송일, 상품 상태, VIP 등급 등을 종합적으로 판단하여 반품 가능 여부를 결정합니다.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "order_number": {
+                    "type": "string",
+                    "description": "주문번호 (예: 'KS-2024-001234')"
+                },
+                "customer_id": {
+                    "type": "string",
+                    "description": "고객 ID (예: 'customer_ecommerce_001')"
+                }
+            },
+            "required": ["order_number", "customer_id"]
+        }
+    }
+]

@@ -423,7 +423,7 @@ def create_agentcore_runtime_execution_role():
     return role_arn
 
 
-def save_customer_support_secret(secret_value):
+def save_customer_support_secret(secret_value, verbose=False):
     """Secret을 AWS Secrets Manager에 저장합니다."""
     boto_session = Session()
     region = boto_session.region_name
@@ -435,10 +435,27 @@ def save_customer_support_secret(secret_value):
             SecretString=secret_value,
             Description="Ecommerce Customer Support Agent Cognito Configuration",
         )
-        print(f"✅ Created secret: {secret_name}")
+        if verbose:
+            print(f"✅ Created secret: {secret_name}")
     except secrets_client.exceptions.ResourceExistsException:
         secrets_client.update_secret(SecretId=secret_name, SecretString=secret_value)
-        print(f"✅ Updated existing secret: {secret_name}")
+        if verbose:
+            print(f"✅ Updated existing secret: {secret_name}")
+
+
+def get_customer_support_secret():
+    """AWS Secrets Manager에서 Cognito 설정을 가져옵니다."""
+    boto_session = Session()
+    region = boto_session.region_name
+    secrets_client = boto3.client("secretsmanager", region_name=region)
+
+    try:
+        response = secrets_client.get_secret_value(SecretId=secret_name)
+        return json.loads(response["SecretString"])
+    except secrets_client.exceptions.ResourceNotFoundException:
+        return None
+    except Exception:
+        return None
     except Exception as e:
         print(f"❌ Error saving secret: {str(e)}")
         return False
@@ -446,19 +463,43 @@ def save_customer_support_secret(secret_value):
 
 
 def setup_cognito_user_pool():
-    """이커머스 에이전트용 Cognito 사용자 풀을 설정합니다."""
+    """이커머스 에이전트용 Cognito 사용자 풀을 설정합니다.
+
+    기존 설정이 있으면 재사용하고, 없으면 새로 생성합니다.
+    """
     boto_session = Session()
     region = boto_session.region_name
-    # Cognito 클라이언트 초기화
     cognito_client = boto3.client("cognito-idp", region_name=region)
-    
-    # 사용자 풀 생성
+
+    # 기존 설정 확인
+    existing_config = get_customer_support_secret()
+    if existing_config:
+        try:
+            # 기존 사용자 풀이 유효한지 확인
+            pool_id = existing_config.get("pool_id")
+            cognito_client.describe_user_pool(UserPoolId=pool_id)
+
+            # 토큰 재발급
+            client_id = existing_config["client_id"]
+            client_secret = existing_config["client_secret"]
+            bearer_token = reauthenticate_user(client_id, client_secret)
+            existing_config["bearer_token"] = bearer_token
+
+            print(f"✅ 기존 Cognito 설정을 재사용합니다.")
+            print(f"   Pool ID: {pool_id}")
+            print(f"   Client ID: {client_id}")
+            return existing_config
+        except Exception as e:
+            print(f"⚠️ 기존 설정이 유효하지 않습니다. 새로 생성합니다: {e}")
+
+    # 새로운 사용자 풀 생성
+    print("🔧 새로운 Cognito 사용자 풀 생성 중...")
     user_pool_response = cognito_client.create_user_pool(
-        PoolName="EcommerceCustomerSupportPool", 
+        PoolName="EcommerceCustomerSupportPool",
         Policies={"PasswordPolicy": {"MinimumLength": 8}}
     )
     pool_id = user_pool_response["UserPool"]["Id"]
-    
+
     # 앱 클라이언트 생성
     app_client_response = cognito_client.create_user_pool_client(
         UserPoolId=pool_id,
@@ -470,10 +511,9 @@ def setup_cognito_user_pool():
             "ALLOW_USER_SRP_AUTH",
         ],
     )
-    print(app_client_response["UserPoolClient"])
     client_id = app_client_response["UserPoolClient"]["ClientId"]
     client_secret = app_client_response["UserPoolClient"]["ClientSecret"]
-    
+
     # 사용자 생성
     cognito_client.admin_create_user(
         UserPoolId=pool_id,
@@ -481,7 +521,7 @@ def setup_cognito_user_pool():
         TemporaryPassword="Temp123!",
         MessageAction="SUPPRESS",
     )
-    
+
     # 영구 비밀번호 설정
     cognito_client.admin_set_user_password(
         UserPoolId=pool_id,
@@ -489,36 +529,26 @@ def setup_cognito_user_pool():
         Password="MyPassword123!",
         Permanent=True,
     )
-    
-    app_client_id = client_id
-    key = client_secret
-    message = bytes(username + app_client_id, "utf-8")
-    key = bytes(key, "utf-8")
+
+    # 사용자 인증 및 액세스 토큰 가져오기
+    message = bytes(username + client_id, "utf-8")
+    key = bytes(client_secret, "utf-8")
     secret_hash = base64.b64encode(
         hmac.new(key, message, digestmod=hashlib.sha256).digest()
     ).decode()
-    
-    # 사용자 인증 및 액세스 토큰 가져오기
+
     auth_response = cognito_client.initiate_auth(
         ClientId=client_id,
         AuthFlow="USER_PASSWORD_AUTH",
         AuthParameters={
-            "USERNAME": "testuser",
+            "USERNAME": username,
             "PASSWORD": "MyPassword123!",
             "SECRET_HASH": secret_hash,
         },
     )
     bearer_token = auth_response["AuthenticationResult"]["AccessToken"]
-    
-    # 필요한 값들 출력
-    print(f"Pool id: {pool_id}")
-    print(
-        f"Discovery URL: https://cognito-idp.{region}.amazonaws.com/{pool_id}/.well-known/openid-configuration"
-    )
-    print(f"Client ID: {client_id}")
-    print(f"Bearer Token: {bearer_token}")
-    
-    # 추가 처리를 위한 값들 반환
+
+    # 설정 저장 및 반환
     cognito_config = {
         "pool_id": pool_id,
         "client_id": client_id,
@@ -528,7 +558,11 @@ def setup_cognito_user_pool():
         "discovery_url": f"https://cognito-idp.{region}.amazonaws.com/{pool_id}/.well-known/openid-configuration",
     }
     save_customer_support_secret(json.dumps(cognito_config))
-    
+
+    print(f"✅ 새로운 Cognito 설정 완료")
+    print(f"   Pool ID: {pool_id}")
+    print(f"   Client ID: {client_id}")
+
     return cognito_config
 
 
@@ -538,14 +572,14 @@ def reauthenticate_user(client_id, client_secret):
     region = boto_session.region_name
     # Cognito 클라이언트 초기화
     cognito_client = boto3.client("cognito-idp", region_name=region)
-    
+
     # 사용자 인증 및 액세스 토큰 가져오기
     message = bytes(username + client_id, "utf-8")
     key = bytes(client_secret, "utf-8")
     secret_hash = base64.b64encode(
         hmac.new(key, message, digestmod=hashlib.sha256).digest()
     ).decode()
-    
+
     auth_response = cognito_client.initiate_auth(
         ClientId=client_id,
         AuthFlow="USER_PASSWORD_AUTH",
@@ -557,3 +591,236 @@ def reauthenticate_user(client_id, client_secret):
     )
     bearer_token = auth_response["AuthenticationResult"]["AccessToken"]
     return bearer_token
+
+
+def invoke_agent_with_response(runtime, prompt: str, bearer_token: str, session_id: str,
+                                title: str = "에이전트 응답") -> str:
+    """
+    AgentCore Runtime 에이전트를 호출하고 응답을 출력합니다.
+
+    runtime.invoke()를 사용하여 에이전트를 호출하고 응답 텍스트를 추출합니다.
+
+    Args:
+        runtime: AgentCore Runtime 인스턴스
+        prompt: 사용자 질문
+        bearer_token: 인증 토큰
+        session_id: 세션 ID
+        title: 출력 제목 (기본값: "에이전트 응답")
+
+    Returns:
+        에이전트 응답 텍스트
+    """
+    import time
+    from types import GeneratorType
+
+    print(f"✅ {title}:")
+    print()
+
+    response_text = ""
+
+    try:
+        # runtime.invoke() 호출
+        response = runtime.invoke(
+            {"prompt": prompt},
+            bearer_token=bearer_token,
+            session_id=session_id
+        )
+
+        # 응답이 generator인 경우 (스트리밍)
+        if isinstance(response, GeneratorType) or hasattr(response, '__iter__') and not isinstance(response, (dict, str)):
+            for chunk in response:
+                text = _extract_text_from_chunk(chunk)
+                if text:
+                    print(text, end='', flush=True)
+                    response_text += text
+                    time.sleep(0.01)
+        # 응답이 dict인 경우 (단일 응답)
+        elif isinstance(response, dict):
+            response_text = _extract_response_text(response)
+            print(response_text)
+        # 응답이 str인 경우
+        elif isinstance(response, str):
+            response_text = response
+            print(response_text)
+
+    except Exception as e:
+        print(f"⚠️ 호출 오류: {e}")
+
+    print("\n")
+    return response_text
+
+
+def _extract_text_from_chunk(chunk) -> str:
+    """
+    청크에서 텍스트를 추출합니다.
+    제어 이벤트(init_event_loop, start 등)는 건너뜁니다.
+    """
+    if isinstance(chunk, str):
+        return chunk
+
+    if not isinstance(chunk, dict):
+        return ""
+
+    # 제어 이벤트 건너뛰기
+    control_keys = {'init_event_loop', 'start', 'stop', 'end', 'error', 'message_id'}
+    if any(k in chunk for k in control_keys):
+        return ""
+
+    # 형식 1: {'response': '...'}
+    if 'response' in chunk:
+        resp = chunk['response']
+        if isinstance(resp, str):
+            # JSON 이스케이프된 문자열 처리
+            if resp.startswith('"') and resp.endswith('"'):
+                try:
+                    return json.loads(resp)
+                except:
+                    pass
+            return resp
+
+    # 형식 2: {'event': {'contentBlockDelta': {'delta': {'text': '...'}}}}
+    if 'event' in chunk:
+        inner = chunk['event']
+        if isinstance(inner, dict):
+            if 'contentBlockDelta' in inner:
+                return inner['contentBlockDelta'].get('delta', {}).get('text', '')
+            # messageStart, messageStop 등은 무시
+
+    # 형식 3: {'data': '...'}
+    if 'data' in chunk:
+        data = chunk['data']
+        if isinstance(data, str):
+            return data
+
+    # 형식 4: {'delta': {'text': '...'}}
+    if 'delta' in chunk:
+        delta = chunk['delta']
+        if isinstance(delta, dict) and 'text' in delta:
+            return delta['text']
+
+    return ""
+
+
+def _extract_response_text(response: dict) -> str:
+    """응답 딕셔너리에서 텍스트를 추출합니다."""
+    if 'response' in response:
+        if isinstance(response['response'], str):
+            text = response['response']
+            if text.startswith('"') and text.endswith('"'):
+                try:
+                    return json.loads(text)
+                except:
+                    pass
+            return text
+        elif isinstance(response['response'], list) and len(response['response']) > 0:
+            text = response['response'][0]
+            if isinstance(text, bytes):
+                return text.decode('utf-8')
+            return str(text)
+        else:
+            return str(response['response'])
+    return str(response)
+
+
+def invoke_agent_http_streaming(
+    invoke_url: str,
+    headers: dict,
+    prompt: str,
+    title: str = "에이전트 응답"
+) -> str:
+    """
+    HTTP + JWT Bearer Token으로 에이전트를 스트리밍 호출합니다.
+
+    SSE (Server-Sent Events) 형식의 응답을 파싱하여 텍스트만 출력합니다.
+
+    Args:
+        invoke_url: 에이전트 호출 URL
+        headers: HTTP 요청 헤더 (Authorization, Content-Type 등)
+        prompt: 사용자 질문
+        title: 출력 제목 (기본값: "에이전트 응답")
+
+    Returns:
+        에이전트 응답 텍스트
+    """
+    import requests
+    import time
+
+    print(f"📡 {title}")
+    print("=" * 60)
+    print(f"질문: {prompt}")
+    print("-" * 60)
+    print("응답:")
+    print()
+
+    # 시작 시간 기록
+    start_time = time.time()
+    first_token_time = None
+
+    # HTTP POST 요청 (스트리밍)
+    response = requests.post(
+        invoke_url,
+        params={'qualifier': 'DEFAULT'},
+        headers=headers,
+        json={'prompt': prompt},
+        timeout=120,
+        stream=True,
+    )
+
+    full_response = ""
+    chunk_count = 0
+
+    if response.status_code == 200:
+        for line in response.iter_lines():
+            if not line:
+                continue
+
+            chunk_count += 1
+            line_str = line.decode('utf-8')
+
+            # SSE 형식: "data: {...}" 파싱
+            if line_str.startswith('data: '):
+                try:
+                    event = json.loads(line_str[6:])
+                    if isinstance(event, dict):
+                        text = _extract_sse_text(event)
+                        if text:
+                            # 첫 번째 토큰 시간 기록
+                            if first_token_time is None:
+                                first_token_time = time.time()
+                            print(text, end='', flush=True)
+                            full_response += text
+                except json.JSONDecodeError:
+                    pass
+    else:
+        print(f"❌ 오류: {response.status_code} - {response.text}")
+
+    # 종료 시간 계산
+    end_time = time.time()
+    total_time = end_time - start_time
+    ttft = (first_token_time - start_time) if first_token_time else 0
+
+    print()
+    print()
+    print("-" * 60)
+    print(f"✅ 호출 완료! (청크 수: {chunk_count})")
+    print(f"⏱️  첫 토큰 시간 (TTFT): {ttft:.2f}초")
+    print(f"⏱️  총 소요 시간: {total_time:.2f}초")
+
+    return full_response
+
+
+def _extract_sse_text(event: dict) -> str:
+    """SSE 이벤트에서 텍스트를 추출합니다."""
+    # 형식 1: {"event": {"contentBlockDelta": {"delta": {"text": "..."}}}}
+    if 'event' in event:
+        inner = event['event']
+        if isinstance(inner, dict) and 'contentBlockDelta' in inner:
+            return inner['contentBlockDelta'].get('delta', {}).get('text', '')
+
+    # 형식 2: {"data": "..."}
+    if 'data' in event:
+        data = event['data']
+        if isinstance(data, str):
+            return data
+
+    return ""

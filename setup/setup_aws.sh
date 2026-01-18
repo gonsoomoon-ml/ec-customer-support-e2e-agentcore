@@ -71,58 +71,67 @@ else
     exit 1
 fi
 
-# ----- 필수 AWS 서비스 권한 확인 -----
+# ----- 필수 AWS 서비스 권한 확인 (deploy.sh 포함) -----
 echo ""
-echo "🛡️ 필수 AWS 서비스 권한 확인 중..."
-
-services_check=(
-    "ssm:GetParameter"
-    "sts:GetCallerIdentity"
-    "s3:ListBuckets"
-    "cloudformation:ListStacks"
-)
+echo "🛡️ AWS 서비스 권한 확인 중..."
 
 failed_services=()
 
-for service_action in "${services_check[@]}"; do
-    service=$(echo $service_action | cut -d':' -f1)
-    action=$(echo $service_action | cut -d':' -f2)
-    
-    case $service in
-        "ssm")
-            if aws ssm get-parameters-by-path --path "/app/ecommerce" --region $REGION >/dev/null 2>&1; then
-                echo "✅ $service_action"
-            else
-                echo "❌ $service_action"
-                failed_services+=("$service_action")
-            fi
-            ;;
-        "sts")
-            if aws sts get-caller-identity >/dev/null 2>&1; then
-                echo "✅ $service_action"
-            else
-                echo "❌ $service_action"
-                failed_services+=("$service_action")
-            fi
-            ;;
-        "s3")
-            if aws s3 ls >/dev/null 2>&1; then
-                echo "✅ $service_action"
-            else
-                echo "❌ $service_action"
-                failed_services+=("$service_action")
-            fi
-            ;;
-        "cloudformation")
-            if aws cloudformation list-stacks --region $REGION >/dev/null 2>&1; then
-                echo "✅ $service_action"
-            else
-                echo "❌ $service_action"
-                failed_services+=("$service_action")
-            fi
-            ;;
-    esac
-done
+# STS
+if aws sts get-caller-identity >/dev/null 2>&1; then
+    echo "✅ sts:GetCallerIdentity"
+else
+    echo "❌ sts:GetCallerIdentity"
+    failed_services+=("sts")
+fi
+
+# S3
+if aws s3 ls >/dev/null 2>&1; then
+    echo "✅ s3:ListBuckets"
+else
+    echo "❌ s3:ListBuckets"
+    failed_services+=("s3")
+fi
+
+# CloudFormation
+if aws cloudformation list-stacks --region $REGION >/dev/null 2>&1; then
+    echo "✅ cloudformation:ListStacks"
+else
+    echo "❌ cloudformation:ListStacks"
+    failed_services+=("cloudformation")
+fi
+
+# IAM
+if aws iam list-roles --max-items 1 >/dev/null 2>&1; then
+    echo "✅ iam:ListRoles"
+else
+    echo "❌ iam:ListRoles"
+    failed_services+=("iam")
+fi
+
+# Lambda
+if aws lambda list-functions --region $REGION --max-items 1 >/dev/null 2>&1; then
+    echo "✅ lambda:ListFunctions"
+else
+    echo "❌ lambda:ListFunctions"
+    failed_services+=("lambda")
+fi
+
+# DynamoDB
+if aws dynamodb list-tables --region $REGION --max-items 1 >/dev/null 2>&1; then
+    echo "✅ dynamodb:ListTables"
+else
+    echo "❌ dynamodb:ListTables"
+    failed_services+=("dynamodb")
+fi
+
+# Cognito
+if aws cognito-idp list-user-pools --region $REGION --max-results 1 >/dev/null 2>&1; then
+    echo "✅ cognito-idp:ListUserPools"
+else
+    echo "❌ cognito-idp:ListUserPools"
+    failed_services+=("cognito-idp")
+fi
 
 if [ ${#failed_services[@]} -ne 0 ]; then
     echo ""
@@ -131,45 +140,17 @@ if [ ${#failed_services[@]} -ne 0 ]; then
         echo "   • $service"
     done
     echo ""
-    echo "💡 필요한 IAM 권한:"
-    echo "   • SSMReadOnlyAccess"
-    echo "   • CloudFormationFullAccess"
-    echo "   • S3ReadOnlyAccess"
+    echo "💡 deploy.sh 실행에 필요한 IAM 권한:"
+    echo "   • cloudformation:*"
+    echo "   • iam:*"
+    echo "   • s3:*"
+    echo "   • lambda:*"
+    echo "   • dynamodb:*"
+    echo "   • ssm:*"
+    echo "   • cognito-idp:*"
     echo ""
-fi
-
-# ----- 기존 리소스 확인 -----
-echo ""
-echo "🔍 기존 K-Style 리소스 확인 중..."
-
-# SSM Parameters 확인
-echo "   • SSM Parameters:"
-ecommerce_params=$(aws ssm get-parameters-by-path --path "/app/ecommerce" --region $REGION --query "Parameters[*].Name" --output text 2>/dev/null || echo "")
-customersupport_params=$(aws ssm get-parameters-by-path --path "/app/customersupport" --region $REGION --query "Parameters[*].Name" --output text 2>/dev/null || echo "")
-
-if [ ! -z "$ecommerce_params" ]; then
-    echo "     ✅ 이커머스 Parameter 발견: $(echo $ecommerce_params | wc -w)개"
-else
-    echo "     ⚠️ 이커머스 Parameter 없음"
-fi
-
-if [ ! -z "$customersupport_params" ]; then
-    echo "     ✅ 고객지원 Parameter 발견: $(echo $customersupport_params | wc -w)개"
-else
-    echo "     ⚠️ 고객지원 Parameter 없음"
-fi
-
-# CloudFormation 스택 확인
-echo "   • CloudFormation 스택:"
-cf_stacks=$(aws cloudformation list-stacks --region $REGION --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --query "StackSummaries[?contains(StackName, 'Customer') || contains(StackName, 'Ecommerce')].[StackName,StackStatus]" --output text 2>/dev/null || echo "")
-
-if [ ! -z "$cf_stacks" ]; then
-    echo "     ✅ 관련 스택 발견:"
-    echo "$cf_stacks" | while read -r stack_name stack_status; do
-        echo "       • $stack_name ($stack_status)"
-    done
-else
-    echo "     ⚠️ 관련 CloudFormation 스택 없음"
+    echo "   권장: AdministratorAccess 정책 사용"
+    echo ""
 fi
 
 # ----- 환경 설정 요약 -----
@@ -189,7 +170,7 @@ fi
 echo ""
 echo "🚀 다음 단계:"
 echo "   1. 인프라 배포 (CloudFormation):"
-echo "      ./infra/scripts/deploy.sh"
+echo "      ./setup/deploy_infra.sh"
 echo ""
 echo "   2. 노트북 실행:"
 echo "      notebooks/lab-01-create-ecommerce-agent.ipynb 열기"

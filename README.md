@@ -66,8 +66,7 @@ source .venv/bin/activate
 # 3. Deploy infrastructure (Cognito, IAM, Lambda)
 ./setup/deploy_infra.sh
 
-# 4. Start Jupyter Lab
-jupyter lab notebooks/
+# 4. Open notebooks in VS Code and run Lab 1-6
 ```
 
 ## Tutorial Labs

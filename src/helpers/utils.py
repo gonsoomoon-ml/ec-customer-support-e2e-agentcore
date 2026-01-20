@@ -726,7 +726,8 @@ def invoke_agent_http_streaming(
     invoke_url: str,
     headers: dict,
     prompt: str,
-    title: str = "에이전트 응답"
+    title: str = "에이전트 응답",
+    extra_payload: dict = None
 ) -> str:
     """
     HTTP + JWT Bearer Token으로 에이전트를 스트리밍 호출합니다.
@@ -738,6 +739,7 @@ def invoke_agent_http_streaming(
         headers: HTTP 요청 헤더 (Authorization, Content-Type 등)
         prompt: 사용자 질문
         title: 출력 제목 (기본값: "에이전트 응답")
+        extra_payload: 추가 페이로드 (예: session_id, user_id for Langfuse)
 
     Returns:
         에이전트 응답 텍스트
@@ -756,12 +758,17 @@ def invoke_agent_http_streaming(
     start_time = time.time()
     first_token_time = None
 
+    # 페이로드 구성
+    payload = {'prompt': prompt}
+    if extra_payload:
+        payload.update(extra_payload)
+
     # HTTP POST 요청 (스트리밍)
     response = requests.post(
         invoke_url,
         params={'qualifier': 'DEFAULT'},
         headers=headers,
-        json={'prompt': prompt},
+        json=payload,
         timeout=120,
         stream=True,
     )

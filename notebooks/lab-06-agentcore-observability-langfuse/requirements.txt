@@ -1,0 +1,4 @@
+strands-agents[otel]>=0.1.0
+langfuse>=2.0.0
+bedrock-agentcore>=0.1.2
+boto3>=1.39.15

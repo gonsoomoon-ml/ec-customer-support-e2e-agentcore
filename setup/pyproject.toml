@@ -5,7 +5,8 @@ description = "Korean Fashion & Beauty E-commerce Customer Support Agent using A
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "strands-agents[litellm]>=0.7.0",
+    "strands-agents[litellm,otel]>=0.7.0",
+    "langfuse>=2.0.0",
     "strands-agents-tools>=0.2.2",
     "uv>=0.8.3",
     "boto3>=1.39.15",

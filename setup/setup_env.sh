@@ -13,25 +13,9 @@ echo "==============================================="
 echo "📅 $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
 
-# ----- Python 버전 선택 -----
-echo "🐍 Python 버전을 선택하세요:"
-echo ""
-echo "1. Python 3.12 (권장 - 최신 기능 및 성능)"
-echo "2. Python 3.11 (안정 - 모든 패키지 검증됨)"
-echo ""
-read -p "선택 (1 또는 2, 기본값 1): " python_choice
-
-case $python_choice in
-    2)
-        PYTHON_VERSION="3.11"
-        echo "✅ Python 3.11 선택됨 (안정 버전)"
-        ;;
-    *)
-        PYTHON_VERSION="3.12"
-        echo "✅ Python 3.12 선택됨 (최신 버전)"
-        ;;
-esac
-
+# ----- Python 버전 설정 (기본값: 3.12) -----
+PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
+echo "🐍 Python $PYTHON_VERSION 사용"
 echo ""
 
 # ----- 가상환경 이름 설정 -----
@@ -80,7 +64,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "   • 가상환경 생성 중..."
-uv venv --python $PYTHON_VERSION
+uv venv --python $PYTHON_VERSION --clear
 if [ $? -ne 0 ]; then
     echo "❌ 가상환경 생성 실패"
     exit 1
@@ -102,6 +86,39 @@ fi
 echo "🐍 현재 Python 환경:"
 echo "   • Python 경로: $(which python)"
 echo "   • Python 버전: $(python --version)"
+echo ""
+
+# ----- 프로젝트 루트에 심볼릭 링크 생성 -----
+echo "🔗 프로젝트 루트에 심볼릭 링크 생성 중..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# .venv 심볼릭 링크
+if [ ! -L "$PROJECT_ROOT/.venv" ]; then
+    ln -sfn "$SCRIPT_DIR/.venv" "$PROJECT_ROOT/.venv"
+    echo "   ✅ .venv -> setup/.venv"
+else
+    echo "   ✅ .venv 심볼릭 링크 이미 존재"
+fi
+
+# pyproject.toml 심볼릭 링크
+if [ ! -L "$PROJECT_ROOT/pyproject.toml" ]; then
+    ln -sfn "$SCRIPT_DIR/pyproject.toml" "$PROJECT_ROOT/pyproject.toml"
+    echo "   ✅ pyproject.toml -> setup/pyproject.toml"
+else
+    echo "   ✅ pyproject.toml 심볼릭 링크 이미 존재"
+fi
+
+# uv.lock 심볼릭 링크
+if [ ! -L "$PROJECT_ROOT/uv.lock" ]; then
+    ln -sfn "$SCRIPT_DIR/uv.lock" "$PROJECT_ROOT/uv.lock"
+    echo "   ✅ uv.lock -> setup/uv.lock"
+else
+    echo "   ✅ uv.lock 심볼릭 링크 이미 존재"
+fi
+
+echo "✅ 심볼릭 링크 생성 완료"
+echo "   프로젝트 루트에서 'source .venv/bin/activate' 또는 'uv run' 사용 가능"
 echo ""
 
 echo "⏳ 환경 확인 완료... (5초)"

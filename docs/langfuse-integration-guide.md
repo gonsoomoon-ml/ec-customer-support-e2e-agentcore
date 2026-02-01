@@ -5,6 +5,7 @@ This document provides a comprehensive guide on integrating Langfuse observabili
 ## Table of Contents
 
 - [Overview](#overview)
+- [Langfuse Hosting Options](#langfuse-hosting-options)
 - [Architecture: How It Works](#architecture-how-it-works)
 - [OpenTelemetry: The Bridge](#opentelemetry-the-bridge)
 - [Trace Hierarchy and Data Captured](#trace-hierarchy-and-data-captured)
@@ -38,6 +39,80 @@ The integration uses **OpenTelemetry (OTEL)** as the transport layer. Strands Ag
 ```
 Strands Agent → OTEL Exporter → Langfuse OTEL Endpoint → Langfuse Dashboard
 ```
+
+---
+
+## Langfuse Hosting Options
+
+Langfuse는 두 가지 방식으로 배포할 수 있습니다:
+
+| 옵션 | 설명 | 장점 | 단점 |
+|------|------|------|------|
+| **Public Cloud** | Langfuse 관리형 서비스 | 즉시 시작, 유지보수 불필요 | 데이터가 외부 서버에 저장 |
+| **Self-hosted Fargate** | AWS ECS에 직접 배포 | 데이터 완전 제어, VPC 내부 운영 | 인프라 관리 필요 |
+
+### Option 1: Public Langfuse Cloud
+
+가장 빠르게 시작할 수 있는 방법입니다. Free tier가 제공됩니다.
+
+**설정 방법:**
+1. [langfuse.com](https://langfuse.com) 에서 계정 생성
+2. 프로젝트 생성
+3. Settings → API Keys에서 키 발급
+4. `.env` 파일 설정:
+   ```bash
+   LANGFUSE_PUBLIC_KEY=pk-lf-your-public-key
+   LANGFUSE_SECRET_KEY=sk-lf-your-secret-key
+   LANGFUSE_BASE_URL=https://us.cloud.langfuse.com  # US region
+   # 또는 https://cloud.langfuse.com  # EU region
+   ```
+
+**Endpoints:**
+| Region | Base URL |
+|--------|----------|
+| US | `https://us.cloud.langfuse.com` |
+| EU | `https://cloud.langfuse.com` |
+
+### Option 2: Self-hosted on AWS Fargate
+
+데이터를 AWS 내부에서 완전히 제어하려면 ECS Fargate에 Langfuse를 직접 배포할 수 있습니다.
+
+**배포 가이드:** [deploy-langfuse-on-ecs-with-fargate](https://github.com/gonsoomoon-ml/deploy-langfuse-on-ecs-with-fargate)
+
+**아키텍처:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        AWS VPC                               │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
+│  │     ALB     │───▶│  ECS Fargate │───▶│   Aurora    │     │
+│  │  (Public)   │    │  (Langfuse)  │    │ PostgreSQL  │     │
+│  └─────────────┘    └─────────────┘    └─────────────┘     │
+│         │                                                    │
+│         │ HTTP/HTTPS                                         │
+│         ▼                                                    │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │              AgentCore Runtime                       │    │
+│  │         (OTEL traces → Langfuse ALB)                │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**설정 방법:**
+1. GitHub 저장소 클론 및 CDK 배포
+2. 배포 완료 후 ALB DNS 확인
+3. Langfuse 웹 UI (ALB 주소)에서 프로젝트 및 API 키 생성
+4. `.env` 파일 설정:
+   ```bash
+   LANGFUSE_PUBLIC_KEY=pk-lf-your-key
+   LANGFUSE_SECRET_KEY=sk-lf-your-key
+   LANGFUSE_BASE_URL=http://your-alb-endpoint.region.elb.amazonaws.com
+   ```
+
+**Self-hosted 장점:**
+- 데이터가 AWS VPC 내부에만 저장
+- 기업 보안 정책 준수 용이
+- 네트워크 지연 시간 최소화
+- 커스텀 도메인 및 SSL 설정 가능
 
 ---
 
@@ -1035,6 +1110,10 @@ langfuse.flush()
 - [AgentCore Samples - Langfuse Notebook](https://github.com/awslabs/amazon-bedrock-agentcore-samples/blob/main/01-tutorials/06-AgentCore-observability/04-Agentcore-runtime-partner-observability/Langfuse/runtime_with_strands_and_langfuse.ipynb)
 - [Strands Agents Observability Sample](https://github.com/strands-agents/samples/blob/main/01-tutorials/01-fundamentals/08-observability-and-evaluation/Observability-and-Evaluation-sample.ipynb)
 - [Langfuse Docs - AWS Strands Agents Cookbook](https://github.com/langfuse/langfuse-docs/blob/main/cookbook/integration_aws_strands_agents.ipynb)
+
+### Self-hosted Deployment
+
+- [Deploy Langfuse on ECS with Fargate](https://github.com/gonsoomoon-ml/deploy-langfuse-on-ecs-with-fargate) - AWS Fargate에 Langfuse 배포 가이드
 
 ### Related Documentation
 

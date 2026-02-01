@@ -48,8 +48,14 @@
 - AWS CLI configured
 - AWS Account with `AdministratorAccess` (or equivalent permissions)
 
-### Optional (Lab 6)
-- [Langfuse Cloud](https://langfuse.com) account (free tier available)
+### Optional (Lab 6 - Langfuse Observability)
+
+Langfuse는 두 가지 방식으로 사용할 수 있습니다:
+
+| 옵션 | 설명 | 링크 |
+|------|------|------|
+| **Public Langfuse** | 클라우드 서비스 (빠른 시작) | [langfuse.com](https://langfuse.com) |
+| **Self-hosted Fargate** | AWS ECS에 직접 배포 | [deploy-langfuse-on-ecs-with-fargate](https://github.com/gonsoomoon-ml/deploy-langfuse-on-ecs-with-fargate) |
 
 ## Quick Start
 
@@ -117,13 +123,19 @@ source .venv/bin/activate
 | CloudWatch GenAI | 추적, 세션, 이벤트 시각화 |
 
 ### Lab 6: Langfuse Observability (Optional)
-**파일**: `lab-06-langfuse-observability/lab-06-langfuse-observability.ipynb`
+**파일**: `lab-06-agentcore-observability-langfuse/lab-06-agentcore-observability-langfuse.ipynb`
 
 | 학습 목표 | 내용 |
 |----------|------|
 | Langfuse 통합 | `StrandsTelemetry` 설정 |
-| 외부 관측성 | AWS 외부에서 모니터링 |
+| 배포 옵션 | Public Cloud 또는 Self-hosted Fargate 선택 |
 | 비용 추적 | 토큰 사용량, 비용 시각화 |
+
+**Langfuse 배포 옵션:**
+- **Public**: [langfuse.com](https://langfuse.com) - 빠른 설정, Free tier 제공
+- **Self-hosted**: [deploy-langfuse-on-ecs-with-fargate](https://github.com/gonsoomoon-ml/deploy-langfuse-on-ecs-with-fargate) - 데이터 완전 제어
+
+📖 **상세 가이드**: [Langfuse Integration Guide](docs/langfuse-integration-guide.md)
 
 > **Note**: CloudWatch와 Langfuse는 동시 사용 불가 (TracerProvider 충돌)
 
@@ -146,7 +158,7 @@ ec-customer-support-e2e-agentcore/
 │   ├── lab-03-agentcore-gateway.ipynb
 │   ├── lab-04-agentcore-runtime/
 │   ├── lab-05-agentcore-observability/
-│   ├── lab-06-langfuse-observability/
+│   ├── lab-06-agentcore-observability-langfuse/
 │   └── lab-09-cleanup.ipynb
 ├── src/                          # Source Code
 │   ├── agent.py                  # Main agent
@@ -185,3 +197,4 @@ ec-customer-support-e2e-agentcore/
 - [Strands Agents Framework](https://github.com/strands-agents/strands-agents)
 - [OpenTelemetry Python](https://opentelemetry.io/docs/languages/python/)
 - [Langfuse Documentation](https://langfuse.com/docs)
+- [Deploy Langfuse on ECS with Fargate](https://github.com/gonsoomoon-ml/deploy-langfuse-on-ecs-with-fargate)

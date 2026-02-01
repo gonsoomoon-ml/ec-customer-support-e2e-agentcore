@@ -1,48 +1,50 @@
-# Langfuse Integration Guide for AWS Bedrock AgentCore
+# Langfuse 통합 가이드 - AWS Bedrock AgentCore
 
-This document provides a comprehensive guide on integrating Langfuse observability with Amazon Bedrock AgentCore and Strands Agents.
+Amazon Bedrock AgentCore 및 Strands Agents와 Langfuse 관측성(Observability)을 통합하는 종합 가이드입니다.
 
-## Table of Contents
+## 목차
 
-- [Overview](#overview)
-- [Langfuse Hosting Options](#langfuse-hosting-options)
-- [Architecture: How It Works](#architecture-how-it-works)
-- [OpenTelemetry: The Bridge](#opentelemetry-the-bridge)
-- [Trace Hierarchy and Data Captured](#trace-hierarchy-and-data-captured)
-- [Authentication Flow](#authentication-flow)
-- [Deployment Modes](#deployment-modes)
-- [Configuration](#configuration)
-- [The Agentic Loop in Detail](#the-agentic-loop-in-detail)
-- [LLM Input/Output Per Step](#llm-inputoutput-per-step)
-- [CloudWatch vs Langfuse Comparison](#cloudwatch-vs-langfuse-comparison)
-- [Implementation Examples](#implementation-examples)
-- [Troubleshooting](#troubleshooting)
-- [References](#references)
-
----
-
-## Overview
-
-Langfuse is an open-source LLM observability platform that provides tracing, monitoring, and evaluation capabilities for AI agents. When integrated with Amazon Bedrock AgentCore, it offers:
-
-- **Trace Visualization**: Hierarchical view of agent execution
-- **Cost Tracking**: Detailed per-model token usage and pricing
-- **LLM Playground**: Replay and test prompts directly
-- **Evaluations**: LLM-as-a-judge automated evaluation
-- **Prompt Management**: Version control for prompts
-- **Session Analytics**: Group and analyze multi-turn conversations
-
-### Integration Method
-
-The integration uses **OpenTelemetry (OTEL)** as the transport layer. Strands Agents emit OTEL-format traces, which are sent to Langfuse's OTEL endpoint via HTTP.
-
-```
-Strands Agent → OTEL Exporter → Langfuse OTEL Endpoint → Langfuse Dashboard
-```
+- [개요](#개요)
+- [Langfuse 호스팅 옵션](#langfuse-호스팅-옵션)
+- [아키텍처: 동작 원리](#아키텍처-동작-원리)
+- [OpenTelemetry: 연결 다리](#opentelemetry-연결-다리)
+- [트레이스 계층 구조와 수집 데이터](#트레이스-계층-구조와-수집-데이터)
+- [인증 흐름](#인증-흐름)
+- [배포 모드](#배포-모드)
+- [환경 설정](#환경-설정)
+- [에이전트 루프 상세 분석](#에이전트-루프-상세-분석)
+- [단계별 LLM 입출력](#단계별-llm-입출력)
+- [CloudWatch vs Langfuse 비교](#cloudwatch-vs-langfuse-비교)
+- [구현 예제](#구현-예제)
+- [문제 해결](#문제-해결)
+- [참고 자료](#참고-자료)
 
 ---
 
-## Langfuse Hosting Options
+## 개요
+
+Langfuse는 AI 에이전트를 위한 **오픈소스 LLM 관측성 플랫폼**입니다. 트레이싱, 모니터링, 평가 기능을 제공하며, Amazon Bedrock AgentCore와 통합하면 다음과 같은 기능을 활용할 수 있습니다:
+
+| 기능 | 설명 |
+|------|------|
+| **트레이스 시각화** | 에이전트 실행의 계층적 뷰 제공 |
+| **비용 추적** | 모델별 토큰 사용량 및 가격 상세 분석 |
+| **LLM Playground** | 프롬프트 재실행 및 테스트 |
+| **평가 (Evaluations)** | LLM-as-a-judge 자동 평가 |
+| **프롬프트 관리** | 프롬프트 버전 관리 |
+| **세션 분석** | 멀티턴 대화 그룹화 및 분석 |
+
+### 통합 방식
+
+Strands Agents와 Langfuse는 **OpenTelemetry (OTEL)** 프로토콜을 통해 연동됩니다. Strands Agents가 OTEL 형식의 트레이스를 생성하고, HTTP를 통해 Langfuse의 OTEL 엔드포인트로 전송합니다.
+
+```
+Strands Agent → OTEL Exporter → Langfuse OTEL Endpoint → Langfuse 대시보드
+```
+
+---
+
+## Langfuse 호스팅 옵션
 
 Langfuse는 두 가지 방식으로 배포할 수 있습니다:
 
@@ -53,7 +55,7 @@ Langfuse는 두 가지 방식으로 배포할 수 있습니다:
 
 ### Option 1: Public Langfuse Cloud
 
-가장 빠르게 시작할 수 있는 방법입니다. Free tier가 제공됩니다.
+가장 빠르게 시작할 수 있는 방법입니다. **Free tier**가 제공됩니다.
 
 **설정 방법:**
 1. [langfuse.com](https://langfuse.com) 에서 계정 생성
@@ -63,15 +65,15 @@ Langfuse는 두 가지 방식으로 배포할 수 있습니다:
    ```bash
    LANGFUSE_PUBLIC_KEY=pk-lf-your-public-key
    LANGFUSE_SECRET_KEY=sk-lf-your-secret-key
-   LANGFUSE_BASE_URL=https://us.cloud.langfuse.com  # US region
-   # 또는 https://cloud.langfuse.com  # EU region
+   LANGFUSE_BASE_URL=https://us.cloud.langfuse.com  # US 리전
+   # 또는 https://cloud.langfuse.com  # EU 리전
    ```
 
-**Endpoints:**
-| Region | Base URL |
-|--------|----------|
-| US | `https://us.cloud.langfuse.com` |
-| EU | `https://cloud.langfuse.com` |
+**리전별 엔드포인트:**
+| 리전 | Base URL |
+|------|----------|
+| US (미국) | `https://us.cloud.langfuse.com` |
+| EU (유럽) | `https://cloud.langfuse.com` |
 
 ### Option 2: Self-hosted on AWS Fargate
 
@@ -116,25 +118,26 @@ Langfuse는 두 가지 방식으로 배포할 수 있습니다:
 
 ---
 
-## Architecture: How It Works
+## 아키텍처: 동작 원리
+
+에이전트 코드에서 Langfuse까지의 데이터 흐름을 보여줍니다:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        Your Agent Code                               │
+│                        에이전트 코드                                  │
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐              │
-│  │ LLM Call    │───▶│ Tool Call   │───▶│ LLM Call    │              │
-│  │ (Claude)    │    │ (check_     │    │ (Final      │              │
-│  │             │    │  return)    │    │  Response)  │              │
+│  │ LLM 호출    │───▶│ 도구 호출   │───▶│ LLM 호출    │              │
+│  │ (Claude)    │    │ (반품 확인) │    │ (최종 응답) │              │
 │  └─────────────┘    └─────────────┘    └─────────────┘              │
 │         │                  │                  │                      │
 │         ▼                  ▼                  ▼                      │
 │  ┌─────────────────────────────────────────────────────────────┐    │
-│  │              Strands Telemetry (Auto-Instrumentation)        │    │
-│  │   - Captures: inputs, outputs, tokens, latency, errors      │    │
+│  │              Strands Telemetry (자동 계측)                   │    │
+│  │   - 수집 항목: 입력, 출력, 토큰, 지연시간, 오류              │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 │                              │                                       │
 └──────────────────────────────│───────────────────────────────────────┘
-                               │ OTEL Protocol (HTTP/gRPC)
+                               │ OTEL 프로토콜 (HTTP/gRPC)
                                ▼
                     ┌─────────────────────┐
                     │   OTEL Exporter     │
@@ -151,139 +154,139 @@ Langfuse는 두 가지 방식으로 배포할 수 있습니다:
 
 ---
 
-## OpenTelemetry: The Bridge
+## OpenTelemetry: 연결 다리
 
-OpenTelemetry (OTEL) is a CNCF standard for distributed tracing. It serves as the bridge between your agent and Langfuse.
+OpenTelemetry (OTEL)는 분산 트레이싱을 위한 **CNCF 표준**입니다. 에이전트와 Langfuse 사이의 다리 역할을 합니다.
 
-### Key Concepts
+### 핵심 개념
 
-| Concept | Description | Langfuse Mapping |
-|---------|-------------|------------------|
-| **Trace** | A complete request/response cycle | Langfuse Trace |
-| **Span** | An individual operation within a trace | Langfuse Observation |
-| **Event** | A point-in-time occurrence within a span | Langfuse Event |
-| **Attribute** | Key-value metadata attached to spans | Langfuse Metadata |
+| 개념 | 설명 | Langfuse 매핑 |
+|------|------|---------------|
+| **Trace (트레이스)** | 하나의 완전한 요청/응답 사이클 | Langfuse Trace |
+| **Span (스팬)** | 트레이스 내의 개별 작업 단위 | Langfuse Observation |
+| **Event (이벤트)** | 스팬 내에서 특정 시점에 발생한 일 | Langfuse Event |
+| **Attribute (속성)** | 스팬에 첨부된 키-값 메타데이터 | Langfuse Metadata |
 
-### How Strands Telemetry Works
+### Strands Telemetry 동작 방식
 
-When you call `StrandsTelemetry().setup_otlp_exporter()`, it:
+`StrandsTelemetry().setup_otlp_exporter()`를 호출하면 다음이 수행됩니다:
 
-1. Initializes the OTEL SDK with the configured exporter
-2. Instruments the Strands Agent SDK automatically
-3. Captures all LLM calls, tool executions, and agent lifecycle events
-4. Batches and sends traces to the configured endpoint
+1. 설정된 exporter로 OTEL SDK 초기화
+2. Strands Agent SDK 자동 계측 (instrumentation)
+3. 모든 LLM 호출, 도구 실행, 에이전트 생명주기 이벤트 캡처
+4. 설정된 엔드포인트로 트레이스 배치 전송
 
 ```python
 from strands.telemetry import StrandsTelemetry
 
-# This single line enables all telemetry
+# 이 한 줄로 모든 텔레메트리가 활성화됩니다
 strands_telemetry = StrandsTelemetry().setup_otlp_exporter()
 ```
 
 ---
 
-## Trace Hierarchy and Data Captured
+## 트레이스 계층 구조와 수집 데이터
 
-### Trace Structure
+### 트레이스 구조
 
 ```
-Trace (one per agent invocation)
+Trace (에이전트 호출당 하나)
 │
 ├── Span: agent.invoke
 │   ├── Attribute: user.id = "customer@example.com"
 │   ├── Attribute: session.id = "session-123"
 │   │
-│   ├── Span: llm.chat (1st LLM call)
-│   │   ├── Event: gen_ai.system.message (system prompt)
-│   │   ├── Event: gen_ai.user.message (user input)
-│   │   ├── Event: gen_ai.choice (tool_use decision)
+│   ├── Span: llm.chat (첫 번째 LLM 호출)
+│   │   ├── Event: gen_ai.system.message (시스템 프롬프트)
+│   │   ├── Event: gen_ai.user.message (사용자 입력)
+│   │   ├── Event: gen_ai.choice (tool_use 결정)
 │   │   ├── Attribute: gen_ai.usage.input_tokens = 1500
 │   │   ├── Attribute: gen_ai.usage.output_tokens = 200
 │   │   └── Attribute: gen_ai.response.model = "claude-3-7-sonnet"
 │   │
-│   ├── Span: tool.execute (tool call)
+│   ├── Span: tool.execute (도구 호출)
 │   │   ├── Attribute: tool.name = "check_return_eligibility"
 │   │   ├── Attribute: tool.input = {"order_id": "ORD-123"}
 │   │   ├── Attribute: tool.output = {"eligible": true, ...}
 │   │   └── Attribute: duration_ms = 150
 │   │
-│   └── Span: llm.chat (2nd LLM call - final response)
-│       ├── Event: gen_ai.tool.message (tool result)
+│   └── Span: llm.chat (두 번째 LLM 호출 - 최종 응답)
+│       ├── Event: gen_ai.tool.message (도구 결과)
 │       ├── Event: gen_ai.choice (end_turn)
 │       └── Attribute: gen_ai.usage.output_tokens = 350
 ```
 
-### Data Captured at Each Level
+### 각 레벨에서 수집되는 데이터
 
-| Level | Data | Purpose |
-|-------|------|---------|
-| **Trace** | trace_id, session_id, user_id, tags | Group related operations |
-| **Span** | name, start_time, end_time, status | Measure individual operations |
-| **Event** | gen_ai.* events with content | Capture message content |
-| **Attribute** | tokens, model, latency, metadata | Metrics and context |
+| 레벨 | 데이터 | 목적 |
+|------|--------|------|
+| **Trace** | trace_id, session_id, user_id, tags | 관련 작업 그룹화 |
+| **Span** | name, start_time, end_time, status | 개별 작업 측정 |
+| **Event** | gen_ai.* 이벤트와 내용 | 메시지 내용 캡처 |
+| **Attribute** | tokens, model, latency, metadata | 메트릭 및 컨텍스트 |
 
-### Event Types (gen_ai.* namespace)
+### 이벤트 유형 (gen_ai.* 네임스페이스)
 
-| Event | Description |
-|-------|-------------|
-| `gen_ai.system.message` | System prompt content |
-| `gen_ai.user.message` | User input message |
-| `gen_ai.assistant.message` | LLM response (including tool calls) |
-| `gen_ai.tool.message` | Tool execution result |
-| `gen_ai.choice` | LLM decision (`tool_use` or `end_turn`) |
-| `strands.telemetry.tracer` | Strands agent internal events |
+| 이벤트 | 설명 |
+|--------|------|
+| `gen_ai.system.message` | 시스템 프롬프트 내용 |
+| `gen_ai.user.message` | 사용자 입력 메시지 |
+| `gen_ai.assistant.message` | LLM 응답 (도구 호출 포함) |
+| `gen_ai.tool.message` | 도구 실행 결과 |
+| `gen_ai.choice` | LLM 결정 (`tool_use` 또는 `end_turn`) |
+| `strands.telemetry.tracer` | Strands 에이전트 내부 이벤트 |
 
 ---
 
-## Authentication Flow
+## 인증 흐름
 
-Langfuse uses **Basic Auth** over the OTEL HTTP endpoint.
+Langfuse는 OTEL HTTP 엔드포인트에서 **Basic Auth**를 사용합니다.
 
-### Step-by-Step
+### 단계별 설정
 
 ```python
-# Step 1: Get credentials from Langfuse project settings
+# Step 1: Langfuse 프로젝트 설정에서 자격 증명 가져오기
 LANGFUSE_PUBLIC_KEY = "pk-lf-xxxxxxxx"
 LANGFUSE_SECRET_KEY = "sk-lf-xxxxxxxx"
 
-# Step 2: Create Basic Auth token
+# Step 2: Basic Auth 토큰 생성
 import base64
 auth_string = f"{LANGFUSE_PUBLIC_KEY}:{LANGFUSE_SECRET_KEY}"
 auth_token = base64.b64encode(auth_string.encode()).decode()
-# Result: "cGstbGYteHh4eHh4eHg6c2stbGYteHh4eHh4eHg="
+# 결과: "cGstbGYteHh4eHh4eHg6c2stbGYteHh4eHh4eHg="
 
-# Step 3: Set OTEL exporter headers
+# Step 3: OTEL exporter 헤더 설정
 os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://us.cloud.langfuse.com/api/public/otel"
 os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {auth_token}"
 ```
 
-### HTTP Request Format
+### HTTP 요청 형식
 
-When traces are sent to Langfuse:
+트레이스가 Langfuse로 전송될 때:
 
 ```
 POST https://us.cloud.langfuse.com/api/public/otel/v1/traces
 Headers:
   Authorization: Basic cGstbGYteHh4eHh4eHg6c2stbGYteHh4eHh4eHg=
   Content-Type: application/x-protobuf
-Body: [OTEL trace data in protobuf format]
+Body: [protobuf 형식의 OTEL 트레이스 데이터]
 ```
 
-### Langfuse Endpoints
+### Langfuse 엔드포인트
 
-| Region | Endpoint |
-|--------|----------|
-| US | `https://us.cloud.langfuse.com/api/public/otel` |
-| EU | `https://cloud.langfuse.com/api/public/otel` |
+| 리전 | 엔드포인트 |
+|------|-----------|
+| US (미국) | `https://us.cloud.langfuse.com/api/public/otel` |
+| EU (유럽) | `https://cloud.langfuse.com/api/public/otel` |
 | Self-hosted | `https://your-domain.com/api/public/otel` |
 
 ---
 
-## Deployment Modes
+## 배포 모드
 
-### Mode A: Local Development (Direct OTEL)
+### 모드 A: 로컬 개발 (Direct OTEL)
 
-Use this mode when running agents locally for development and testing.
+개발 및 테스트를 위해 에이전트를 로컬에서 실행할 때 사용합니다.
 
 ```python
 import os
@@ -292,7 +295,7 @@ from strands import Agent
 from strands.telemetry import StrandsTelemetry
 from strands.models.bedrock import BedrockModel
 
-# Configure Langfuse credentials
+# Langfuse 자격 증명 설정
 os.environ["LANGFUSE_PUBLIC_KEY"] = "pk-lf-..."
 os.environ["LANGFUSE_SECRET_KEY"] = "sk-lf-..."
 os.environ["LANGFUSE_BASE_URL"] = "https://us.cloud.langfuse.com"
@@ -304,14 +307,14 @@ LANGFUSE_AUTH = base64.b64encode(
 os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = f"{os.environ['LANGFUSE_BASE_URL']}/api/public/otel"
 os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {LANGFUSE_AUTH}"
 
-# Initialize telemetry - sends directly to Langfuse
+# 텔레메트리 초기화 - Langfuse로 직접 전송
 StrandsTelemetry().setup_otlp_exporter()
 
 model = BedrockModel(model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0")
 
 agent = Agent(
     model=model,
-    system_prompt="You are a helpful assistant.",
+    system_prompt="당신은 친절한 도우미입니다.",
     trace_attributes={
         "session.id": "local-test-123",
         "user.id": "developer@example.com",
@@ -319,23 +322,23 @@ agent = Agent(
     }
 )
 
-# Traces go to Langfuse immediately
-response = agent("Hello, how can you help me?")
+# 트레이스가 즉시 Langfuse로 전송됩니다
+response = agent("안녕하세요, 어떤 도움이 필요하세요?")
 ```
 
-**Data Flow:**
+**데이터 흐름:**
 ```
 ┌──────────────┐         ┌──────────────┐
-│  Your Code   │──OTEL──▶│   Langfuse   │
-│  (Local)     │         │   Cloud      │
+│  로컬 코드    │──OTEL──▶│   Langfuse   │
+│              │         │   Cloud      │
 └──────────────┘         └──────────────┘
 ```
 
-### Mode B: AgentCore Runtime (Container Environment)
+### 모드 B: AgentCore Runtime (컨테이너 환경)
 
-Use this mode when deploying agents to AgentCore Runtime in production.
+프로덕션에서 에이전트를 AgentCore Runtime에 배포할 때 사용합니다.
 
-**Entrypoint file (e.g., `agent_entrypoint.py`):**
+**엔트리포인트 파일 (예: `agent_entrypoint.py`):**
 
 ```python
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -346,22 +349,22 @@ from strands.models.bedrock import BedrockModel
 app = BedrockAgentCoreApp()
 
 def initialize_agent():
-    """Initialize agent with telemetry from environment variables."""
-    # Telemetry reads OTEL_* env vars set during launch()
+    """환경 변수에서 텔레메트리 설정으로 에이전트 초기화."""
+    # launch() 시 설정된 OTEL_* 환경 변수를 텔레메트리가 읽습니다
     StrandsTelemetry().setup_otlp_exporter()
 
     model = BedrockModel(model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0")
 
     agent = Agent(
         model=model,
-        system_prompt="You are a helpful assistant.",
+        system_prompt="당신은 친절한 도우미입니다.",
         tools=[...]
     )
     return agent
 
 @app.entrypoint
 async def invoke(payload):
-    """Streaming entrypoint for AgentCore Runtime."""
+    """AgentCore Runtime용 스트리밍 엔트리포인트."""
     agent = initialize_agent()
     user_input = payload.get("prompt", "")
 
@@ -372,13 +375,13 @@ if __name__ == "__main__":
     app.run()
 ```
 
-**Deployment notebook:**
+**배포 노트북:**
 
 ```python
 import base64
 from bedrock_agentcore_starter_toolkit import Runtime
 
-# Langfuse configuration
+# Langfuse 설정
 langfuse_public_key = "pk-lf-..."
 langfuse_secret_key = "sk-lf-..."
 langfuse_auth = base64.b64encode(
@@ -388,17 +391,17 @@ langfuse_auth = base64.b64encode(
 otel_endpoint = "https://us.cloud.langfuse.com/api/public/otel"
 otel_headers = f"Authorization=Basic {langfuse_auth}"
 
-# Configure runtime
+# 런타임 설정
 runtime = Runtime()
 runtime.configure(
     entrypoint="agent_entrypoint.py",
     execution_role=execution_role_arn,
     agent_name="my-agent-with-langfuse",
     region=region,
-    disable_otel=True,  # Disable CloudWatch OTEL, use Langfuse instead
+    disable_otel=True,  # CloudWatch OTEL 비활성화, Langfuse 대신 사용
 )
 
-# Launch with Langfuse environment variables
+# Langfuse 환경 변수와 함께 배포
 runtime.launch(
     env_vars={
         "OTEL_EXPORTER_OTLP_ENDPOINT": otel_endpoint,
@@ -408,50 +411,50 @@ runtime.launch(
 )
 ```
 
-**Data Flow:**
+**데이터 흐름:**
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                   AgentCore Runtime                          │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │  Container   │    │   Strands    │    │    OTEL      │  │
+│  │  컨테이너    │    │   Strands    │    │    OTEL      │  │
 │  │  (ECR)       │───▶│   Agent      │───▶│   Exporter   │──┼──▶ Langfuse
 │  └──────────────┘    └──────────────┘    └──────────────┘  │
 │         ▲                                                    │
-│         │ env_vars from launch()                            │
+│         │ launch()의 env_vars                               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Configuration
+## 환경 설정
 
-### Environment Variables
+### 환경 변수
 
-| Variable | Purpose | Example |
-|----------|---------|---------|
-| `LANGFUSE_PUBLIC_KEY` | Langfuse public API key | `pk-lf-xxxxxxxx` |
-| `LANGFUSE_SECRET_KEY` | Langfuse secret API key | `sk-lf-xxxxxxxx` |
-| `LANGFUSE_BASE_URL` | Langfuse instance URL | `https://us.cloud.langfuse.com` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTEL exporter endpoint | `https://us.cloud.langfuse.com/api/public/otel` |
-| `OTEL_EXPORTER_OTLP_HEADERS` | OTEL auth headers | `Authorization=Basic xxx...` |
-| `OTEL_SERVICE_NAME` | Service name in traces | `ecommerce-agent` |
-| `DISABLE_ADOT_OBSERVABILITY` | Disable AWS ADOT | `true` |
+| 변수 | 용도 | 예시 |
+|------|------|------|
+| `LANGFUSE_PUBLIC_KEY` | Langfuse 공개 API 키 | `pk-lf-xxxxxxxx` |
+| `LANGFUSE_SECRET_KEY` | Langfuse 비밀 API 키 | `sk-lf-xxxxxxxx` |
+| `LANGFUSE_BASE_URL` | Langfuse 인스턴스 URL | `https://us.cloud.langfuse.com` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTEL exporter 엔드포인트 | `https://us.cloud.langfuse.com/api/public/otel` |
+| `OTEL_EXPORTER_OTLP_HEADERS` | OTEL 인증 헤더 | `Authorization=Basic xxx...` |
+| `OTEL_SERVICE_NAME` | 트레이스의 서비스 이름 | `ecommerce-agent` |
+| `DISABLE_ADOT_OBSERVABILITY` | AWS ADOT 비활성화 | `true` |
 
-### Trace Attributes
+### 트레이스 속성
 
-Configure trace attributes in the Agent constructor to organize data in Langfuse:
+Agent 생성자에서 트레이스 속성을 설정하여 Langfuse에서 데이터를 정리합니다:
 
 ```python
 agent = Agent(
     model=model,
     trace_attributes={
-        # Required for Langfuse grouping
-        "session.id": "unique-session-id",      # Groups multi-turn conversations
-        "user.id": "customer@example.com",      # User-level analytics
+        # Langfuse 그룹화에 필수
+        "session.id": "unique-session-id",      # 멀티턴 대화 그룹화
+        "user.id": "customer@example.com",      # 사용자별 분석
 
-        # Optional Langfuse-specific
-        "langfuse.tags": ["production", "kr"],  # Filterable tags
-        "langfuse.metadata": {                  # Custom metadata
+        # Langfuse 전용 (선택사항)
+        "langfuse.tags": ["production", "kr"],  # 필터 가능한 태그
+        "langfuse.metadata": {                  # 커스텀 메타데이터
             "customer_tier": "premium",
             "order_value": 150000
         }
@@ -459,26 +462,26 @@ agent = Agent(
 )
 ```
 
-### Installation
+### 설치
 
 ```bash
-# Install required packages
+# 필수 패키지 설치
 pip install strands-agents[otel] langfuse
 
-# Or with UV
+# 또는 UV 사용
 uv add strands-agents[otel] langfuse
 ```
 
-The `[otel]` extra is required to enable OpenTelemetry instrumentation.
+> **중요:** OpenTelemetry 계측을 활성화하려면 `[otel]` extra가 필요합니다.
 
 ---
 
-## The Agentic Loop in Detail
+## 에이전트 루프 상세 분석
 
-When your agent processes a request, here's what gets traced:
+에이전트가 요청을 처리할 때 트레이스되는 내용입니다:
 
 ```
-Request: "반품하고 싶어요" (I want to return something)
+요청: "반품하고 싶어요"
 
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Trace: agent-invocation-abc123                                       │
@@ -521,34 +524,34 @@ Request: "반품하고 싶어요" (I want to return something)
 │                                                                      │
 │ [3139ms] ──────────────────────────────────────────────────────────│
 │                                                                      │
-│ Total: 3.14s | Tokens: 3,950 in / 443 out | Cost: $0.0156          │
+│ 총계: 3.14초 | 토큰: 3,950 입력 / 443 출력 | 비용: $0.0156          │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### What Langfuse Shows
+### Langfuse에서 확인할 수 있는 정보
 
-Once Langfuse receives the OTEL traces, it provides:
+Langfuse가 OTEL 트레이스를 수신하면 다음을 제공합니다:
 
-| Feature | How It Uses Trace Data |
-|---------|------------------------|
-| **Trace Timeline** | Visualizes spans hierarchically with timing |
-| **Cost Calculation** | Uses `input_tokens` + `output_tokens` + model pricing |
-| **Latency Analysis** | Aggregates span durations by operation type |
-| **Session Grouping** | Groups traces by `session.id` attribute |
-| **User Analytics** | Tracks usage per `user.id` |
-| **Error Debugging** | Shows span status and error messages |
-| **LLM Playground** | Replays prompts using captured messages |
-| **Evaluations** | Runs LLM-as-a-judge on captured inputs/outputs |
+| 기능 | 트레이스 데이터 활용 방식 |
+|------|--------------------------|
+| **트레이스 타임라인** | 스팬을 타이밍과 함께 계층적으로 시각화 |
+| **비용 계산** | `input_tokens` + `output_tokens` + 모델 가격 사용 |
+| **지연 시간 분석** | 작업 유형별 스팬 지속 시간 집계 |
+| **세션 그룹화** | `session.id` 속성으로 트레이스 그룹화 |
+| **사용자 분석** | `user.id`별 사용량 추적 |
+| **오류 디버깅** | 스팬 상태 및 오류 메시지 표시 |
+| **LLM Playground** | 캡처된 메시지로 프롬프트 재실행 |
+| **평가** | 캡처된 입출력에 LLM-as-a-judge 실행 |
 
 ---
 
-## LLM Input/Output Per Step
+## 단계별 LLM 입출력
 
-This section shows the actual message content that flows into and out of the LLM at each step of the agentic loop.
+이 섹션은 에이전트 루프의 각 단계에서 LLM에 입출력되는 실제 메시지 내용을 보여줍니다.
 
-### Step 1: First LLM Call (User Request → Tool Decision)
+### Step 1: 첫 번째 LLM 호출 (사용자 요청 → 도구 결정)
 
-**INPUT to LLM:**
+**LLM 입력:**
 
 ```json
 {
@@ -565,7 +568,7 @@ This section shows the actual message content that flows into and out of the LLM
   "tools": [
     {
       "name": "check_return_eligibility",
-      "description": "Check if an order is eligible for return",
+      "description": "주문의 반품 가능 여부 확인",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -578,7 +581,7 @@ This section shows the actual message content that flows into and out of the LLM
 }
 ```
 
-**OUTPUT from LLM:**
+**LLM 출력:**
 
 ```json
 {
@@ -605,11 +608,11 @@ This section shows the actual message content that flows into and out of the LLM
 }
 ```
 
-### Step 2: Tool Execution (Agent Runtime, not LLM)
+### Step 2: 도구 실행 (에이전트 런타임, LLM 아님)
 
-The agent runtime executes the tool function locally. This is NOT an LLM call.
+에이전트 런타임이 도구 함수를 로컬에서 실행합니다. 이것은 LLM 호출이 **아닙니다**.
 
-**Tool Input:**
+**도구 입력:**
 
 ```json
 {
@@ -617,7 +620,7 @@ The agent runtime executes the tool function locally. This is NOT an LLM call.
 }
 ```
 
-**Tool Output:**
+**도구 출력:**
 
 ```json
 {
@@ -632,11 +635,11 @@ The agent runtime executes the tool function locally. This is NOT an LLM call.
 }
 ```
 
-### Step 3: Second LLM Call (Tool Result → Final Response)
+### Step 3: 두 번째 LLM 호출 (도구 결과 → 최종 응답)
 
-**INPUT to LLM:**
+**LLM 입력:**
 
-Note how all previous messages are included (conversation history accumulates).
+이전 메시지가 모두 포함됩니다 (대화 히스토리 누적).
 
 ```json
 {
@@ -678,7 +681,7 @@ Note how all previous messages are included (conversation history accumulates).
 }
 ```
 
-**OUTPUT from LLM:**
+**LLM 출력:**
 
 ```json
 {
@@ -697,18 +700,18 @@ Note how all previous messages are included (conversation history accumulates).
 }
 ```
 
-### Visual Flow Diagram
+### 시각적 흐름도
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
-│                              AGENTIC LOOP                                        │
+│                              에이전트 루프                                        │
 ├─────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                  │
 │  ╔═══════════════════════════════════════════════════════════════════════════╗  │
-│  ║  STEP 1: First LLM Call                                                   ║  │
+│  ║  STEP 1: 첫 번째 LLM 호출                                                 ║  │
 │  ╠═══════════════════════════════════════════════════════════════════════════╣  │
 │  ║                                                                           ║  │
-│  ║  INPUT                              OUTPUT                                ║  │
+│  ║  입력                                출력                                  ║  │
 │  ║  ┌─────────────────────┐           ┌─────────────────────┐               ║  │
 │  ║  │ System: K-Style     │           │ Text: "확인해       │               ║  │
 │  ║  │ 고객 지원 에이전트... │    ───▶   │ 드리겠습니다"       │               ║  │
@@ -724,11 +727,11 @@ Note how all previous messages are included (conversation history accumulates).
 │                                     │                                            │
 │                                     ▼                                            │
 │  ╔═══════════════════════════════════════════════════════════════════════════╗  │
-│  ║  STEP 2: Tool Execution (Agent Runtime - NOT LLM)                         ║  │
+│  ║  STEP 2: 도구 실행 (에이전트 런타임 - LLM 아님)                           ║  │
 │  ╠═══════════════════════════════════════════════════════════════════════════╣  │
 │  ║                                                                           ║  │
 │  ║  ┌─────────────────────┐           ┌─────────────────────┐               ║  │
-│  ║  │ Tool Input:         │           │ Tool Output:        │               ║  │
+│  ║  │ 도구 입력:          │           │ 도구 출력:          │               ║  │
 │  ║  │ {                   │    ───▶   │ {                   │               ║  │
 │  ║  │   order_id:         │  (DB/API) │   eligible: true,   │               ║  │
 │  ║  │   "ORD-20240115"    │           │   refund: 89000,    │               ║  │
@@ -740,12 +743,12 @@ Note how all previous messages are included (conversation history accumulates).
 │                                     │                                            │
 │                                     ▼                                            │
 │  ╔═══════════════════════════════════════════════════════════════════════════╗  │
-│  ║  STEP 3: Second LLM Call                                                  ║  │
+│  ║  STEP 3: 두 번째 LLM 호출                                                 ║  │
 │  ╠═══════════════════════════════════════════════════════════════════════════╣  │
 │  ║                                                                           ║  │
-│  ║  INPUT                              OUTPUT                                ║  │
+│  ║  입력                                출력                                  ║  │
 │  ║  ┌─────────────────────┐           ┌─────────────────────┐               ║  │
-│  ║  │ System: (same)      │           │ Text:               │               ║  │
+│  ║  │ System: (동일)      │           │ Text:               │               ║  │
 │  ║  ├─────────────────────┤           │ "네, 반품이         │               ║  │
 │  ║  │ User: "반품 가능?"  │    ───▶   │ 가능합니다!         │               ║  │
 │  ║  ├─────────────────────┤           │                     │               ║  │
@@ -761,39 +764,39 @@ Note how all previous messages are included (conversation history accumulates).
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Message Accumulation Pattern
+### 메시지 누적 패턴
 
-The key insight is that **messages accumulate** with each LLM call:
+핵심 인사이트: **메시지는 각 LLM 호출마다 누적됩니다**:
 
-| LLM Call | Messages in Context |
-|----------|---------------------|
-| **1st** | `[system, user]` |
-| **2nd** | `[system, user, assistant(tool_use), user(tool_result)]` |
-| **3rd** (if needed) | `[system, user, assistant, user(tool_result), assistant(tool_use_2), user(tool_result_2)]` |
+| LLM 호출 | 컨텍스트 내 메시지 |
+|----------|-------------------|
+| **1번째** | `[system, user]` |
+| **2번째** | `[system, user, assistant(tool_use), user(tool_result)]` |
+| **3번째** (필요시) | `[system, user, assistant, user(tool_result), assistant(tool_use_2), user(tool_result_2)]` |
 
-This is why `input_tokens` increases with each call:
-- 1st call: 1,500 tokens (system + user)
-- 2nd call: 2,103 tokens (system + user + assistant + tool_result)
+이것이 `input_tokens`가 각 호출마다 증가하는 이유입니다:
+- 1번째 호출: 1,500 토큰 (system + user)
+- 2번째 호출: 2,103 토큰 (system + user + assistant + tool_result)
 
-### Multi-Tool Example
+### 멀티 도구 예시
 
-If the agent needs multiple tools, the loop continues:
+에이전트가 여러 도구를 사용해야 하는 경우, 루프가 계속됩니다:
 
 ```
-Step 1: LLM → tool_use (tool A)
-Step 2: Execute tool A → result A
-Step 3: LLM → tool_use (tool B)  ← receives result A, decides to call another tool
-Step 4: Execute tool B → result B
-Step 5: LLM → end_turn           ← receives both results, generates final response
+Step 1: LLM → tool_use (도구 A)
+Step 2: 도구 A 실행 → 결과 A
+Step 3: LLM → tool_use (도구 B)  ← 결과 A를 받고 다른 도구 호출 결정
+Step 4: 도구 B 실행 → 결과 B
+Step 5: LLM → end_turn           ← 두 결과를 받고 최종 응답 생성
 ```
 
-**Message accumulation for multi-tool:**
+**멀티 도구의 메시지 누적:**
 
 ```json
 {
   "messages": [
     {"role": "system", "content": "..."},
-    {"role": "user", "content": "original question"},
+    {"role": "user", "content": "원래 질문"},
     {"role": "assistant", "content": [{"type": "tool_use", "name": "tool_A", ...}]},
     {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "A", ...}]},
     {"role": "assistant", "content": [{"type": "tool_use", "name": "tool_B", ...}]},
@@ -804,33 +807,33 @@ Step 5: LLM → end_turn           ← receives both results, generates final re
 
 ---
 
-## CloudWatch vs Langfuse Comparison
+## CloudWatch vs Langfuse 비교
 
-### Feature Comparison
+### 기능 비교
 
-| Feature | CloudWatch GenAI Observability | Langfuse |
-|---------|-------------------------------|----------|
-| **Setup** | Automatic (default in AgentCore) | Manual configuration required |
-| **Cost Tracking** | Basic | Detailed per-model pricing |
-| **LLM Playground** | No | Yes (test prompts directly) |
-| **Evaluations** | Manual | LLM-as-a-judge built-in |
-| **Prompt Management** | No | Version control for prompts |
-| **Open Source** | No | Yes (self-host option) |
-| **AWS Native** | Yes | Partner integration |
-| **X-Ray Integration** | Yes | No |
-| **Logs Insights** | Yes | Limited |
+| 기능 | CloudWatch GenAI Observability | Langfuse |
+|------|-------------------------------|----------|
+| **설정** | 자동 (AgentCore 기본값) | 수동 설정 필요 |
+| **비용 추적** | 기본 | 모델별 상세 가격 |
+| **LLM Playground** | 없음 | 있음 (프롬프트 직접 테스트) |
+| **평가** | 수동 | LLM-as-a-judge 내장 |
+| **프롬프트 관리** | 없음 | 버전 관리 지원 |
+| **오픈 소스** | 아니오 | 예 (셀프 호스팅 가능) |
+| **AWS 네이티브** | 예 | 파트너 통합 |
+| **X-Ray 통합** | 예 | 없음 |
+| **Logs Insights** | 예 | 제한적 |
 
-### Data Flow Comparison
+### 데이터 흐름 비교
 
 ```
                     ┌─────────────────────────────────────────────────┐
                     │            AgentCore Runtime                     │
                     │  ┌─────────────────────────────────────────┐    │
                     │  │          Strands Agent                   │    │
-                    │  │    (with OTEL instrumentation)          │    │
+                    │  │    (OTEL 계측 포함)                       │    │
                     │  └─────────────────────────────────────────┘    │
                     │                     │                            │
-                    │                     │ OTEL traces                │
+                    │                     │ OTEL 트레이스              │
                     │                     ▼                            │
                     │  ┌─────────────────────────────────────────┐    │
                     │  │         OTEL Collector/Exporter          │    │
@@ -839,36 +842,36 @@ Step 5: LLM → end_turn           ← receives both results, generates final re
                     └──────────────│──────────────────│────────────────┘
                                    │                  │
            ┌───────────────────────┘                  └───────────────────────┐
-           │ (Default: AWS ADOT)                      │ (Custom: Langfuse)    │
+           │ (기본값: AWS ADOT)                       │ (커스텀: Langfuse)    │
            ▼                                          ▼
 ┌─────────────────────────┐                ┌─────────────────────────┐
 │   CloudWatch GenAI      │                │       Langfuse          │
 │   Observability         │                │                         │
 ├─────────────────────────┤                ├─────────────────────────┤
-│ • AWS native            │                │ • Open source           │
-│ • Auto-enabled          │                │ • LLM Playground        │
-│ • X-Ray integration     │                │ • Prompt versioning     │
-│ • Basic dashboards      │                │ • LLM-as-judge evals    │
-│ • Logs Insights queries │                │ • Rich UI               │
+│ • AWS 네이티브          │                │ • 오픈 소스             │
+│ • 자동 활성화           │                │ • LLM Playground        │
+│ • X-Ray 통합            │                │ • 프롬프트 버전 관리    │
+│ • 기본 대시보드         │                │ • LLM-as-judge 평가     │
+│ • Logs Insights 쿼리    │                │ • 풍부한 UI             │
 └─────────────────────────┘                └─────────────────────────┘
 ```
 
-### When to Use Which
+### 사용 시나리오별 권장사항
 
-| Use Case | Recommendation |
-|----------|----------------|
-| AWS-only infrastructure, minimal setup | CloudWatch |
-| Need prompt versioning and A/B testing | Langfuse |
-| Want LLM-as-a-judge evaluations | Langfuse |
-| Require X-Ray distributed tracing | CloudWatch |
-| Open source / self-hosted requirement | Langfuse |
-| Multi-cloud or hybrid deployments | Langfuse |
+| 사용 사례 | 권장 |
+|----------|------|
+| AWS 전용 인프라, 최소 설정 원하는 경우 | CloudWatch |
+| 프롬프트 버전 관리 및 A/B 테스트 필요 | Langfuse |
+| LLM-as-a-judge 평가 원하는 경우 | Langfuse |
+| X-Ray 분산 트레이싱 필요 | CloudWatch |
+| 오픈 소스 / 셀프 호스팅 요구사항 | Langfuse |
+| 멀티클라우드 또는 하이브리드 배포 | Langfuse |
 
 ---
 
-## Implementation Examples
+## 구현 예제
 
-### Example 1: Local Development with Langfuse
+### 예제 1: Langfuse로 로컬 개발
 
 ```python
 import os
@@ -877,7 +880,7 @@ from strands import Agent
 from strands.telemetry import StrandsTelemetry
 from strands.models.bedrock import BedrockModel
 
-# Configure Langfuse
+# Langfuse 설정
 os.environ["LANGFUSE_PUBLIC_KEY"] = "pk-lf-..."
 os.environ["LANGFUSE_SECRET_KEY"] = "sk-lf-..."
 LANGFUSE_AUTH = base64.b64encode(
@@ -886,28 +889,28 @@ LANGFUSE_AUTH = base64.b64encode(
 os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://us.cloud.langfuse.com/api/public/otel"
 os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {LANGFUSE_AUTH}"
 
-# Initialize telemetry
+# 텔레메트리 초기화
 StrandsTelemetry().setup_otlp_exporter()
 
-# Create agent
+# 에이전트 생성
 model = BedrockModel(model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0")
 agent = Agent(
     model=model,
-    system_prompt="You are a helpful e-commerce assistant.",
+    system_prompt="당신은 친절한 이커머스 도우미입니다.",
     trace_attributes={
         "session.id": "dev-session-001",
         "user.id": "developer@example.com"
     }
 )
 
-# Run agent
-response = agent("What products do you have?")
+# 에이전트 실행
+response = agent("어떤 상품이 있나요?")
 print(response)
 ```
 
-### Example 2: AgentCore Runtime with Langfuse
+### 예제 2: Langfuse와 AgentCore Runtime
 
-**File: `langfuse_agent.py`**
+**파일: `langfuse_agent.py`**
 
 ```python
 import os
@@ -920,11 +923,11 @@ app = BedrockAgentCoreApp()
 
 @tool
 def check_return_eligibility(order_id: str) -> dict:
-    """Check if an order is eligible for return."""
+    """주문의 반품 가능 여부를 확인합니다."""
     return {
         "order_id": order_id,
         "eligible": True,
-        "reason": "Within 14-day return window"
+        "reason": "14일 반품 기간 내"
     }
 
 def create_agent():
@@ -936,7 +939,7 @@ def create_agent():
 
     return Agent(
         model=model,
-        system_prompt="You are a K-Style e-commerce customer support agent.",
+        system_prompt="당신은 K-Style 이커머스 고객 지원 에이전트입니다.",
         tools=[check_return_eligibility]
     )
 
@@ -951,13 +954,13 @@ if __name__ == "__main__":
     app.run()
 ```
 
-**Deployment:**
+**배포:**
 
 ```python
 import base64
 from bedrock_agentcore_starter_toolkit import Runtime
 
-# Langfuse credentials
+# Langfuse 자격 증명
 langfuse_pk = "pk-lf-..."
 langfuse_sk = "sk-lf-..."
 langfuse_auth = base64.b64encode(f"{langfuse_pk}:{langfuse_sk}".encode()).decode()
@@ -981,9 +984,9 @@ runtime.launch(
 )
 ```
 
-### Example 3: Using Langfuse Python SDK with Strands
+### 예제 3: Strands와 Langfuse Python SDK 함께 사용
 
-For more advanced use cases, you can combine Strands telemetry with Langfuse's Python SDK:
+고급 사용 사례의 경우, Strands 텔레메트리와 Langfuse의 Python SDK를 결합할 수 있습니다:
 
 ```python
 from langfuse import observe, propagate_attributes, get_client
@@ -994,7 +997,7 @@ StrandsTelemetry().setup_otlp_exporter()
 
 @observe()
 def process_customer_request(user_input: str, customer_id: str):
-    """Process a customer request with additional Langfuse tracking."""
+    """추가 Langfuse 추적과 함께 고객 요청을 처리합니다."""
     with propagate_attributes(
         user_id=customer_id,
         session_id=f"session-{customer_id}",
@@ -1004,7 +1007,7 @@ def process_customer_request(user_input: str, customer_id: str):
         agent = Agent(model=model, tools=[...])
         result = agent(user_input)
 
-        # Update trace with custom data
+        # 커스텀 데이터로 트레이스 업데이트
         langfuse = get_client()
         langfuse.update_current_trace(
             input=user_input,
@@ -1014,50 +1017,50 @@ def process_customer_request(user_input: str, customer_id: str):
 
         return result
 
-langfuse.flush()  # Ensure all traces are sent
+langfuse.flush()  # 모든 트레이스가 전송되도록 보장
 ```
 
 ---
 
-## Troubleshooting
+## 문제 해결
 
-### Error: Traces not appearing in Langfuse
+### 오류: Langfuse에 트레이스가 나타나지 않음
 
-**Possible causes:**
+**가능한 원인:**
 
-1. **Missing OTEL extra**: Ensure you installed with `[otel]`
+1. **OTEL extra 누락**: `[otel]`과 함께 설치했는지 확인
    ```bash
    pip install strands-agents[otel]
    ```
 
-2. **Incorrect credentials**: Verify your public/secret keys
+2. **잘못된 자격 증명**: public/secret 키 확인
    ```python
-   # Test authentication
+   # 인증 테스트
    import requests
    response = requests.get(
        "https://us.cloud.langfuse.com/api/public/health",
        headers={"Authorization": f"Basic {langfuse_auth}"}
    )
-   print(response.status_code)  # Should be 200
+   print(response.status_code)  # 200이어야 함
    ```
 
-3. **Telemetry not initialized**: Ensure `setup_otlp_exporter()` is called before agent creation
+3. **텔레메트리 미초기화**: 에이전트 생성 전에 `setup_otlp_exporter()` 호출 확인
 
-4. **Environment variables not set**: Check all required env vars are set
+4. **환경 변수 미설정**: 필수 환경 변수 확인
    ```python
    print(os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"))
    print(os.environ.get("OTEL_EXPORTER_OTLP_HEADERS"))
    ```
 
-### Error: ADOT and Langfuse conflict
+### 오류: ADOT과 Langfuse 충돌
 
-**Cause**: Both CloudWatch ADOT and Langfuse OTEL exporters are active
+**원인**: CloudWatch ADOT과 Langfuse OTEL exporter가 모두 활성화됨
 
-**Solution**: Disable ADOT when using Langfuse
+**해결책**: Langfuse 사용 시 ADOT 비활성화
 ```python
 runtime.configure(
     ...
-    disable_otel=True,  # Disable AgentCore's built-in OTEL
+    disable_otel=True,  # AgentCore 내장 OTEL 비활성화
 )
 
 runtime.launch(
@@ -1068,11 +1071,11 @@ runtime.launch(
 )
 ```
 
-### Error: Missing trace attributes in Langfuse
+### 오류: Langfuse에서 트레이스 속성 누락
 
-**Cause**: `trace_attributes` not passed to Agent
+**원인**: Agent에 `trace_attributes` 미전달
 
-**Solution**: Always include trace attributes
+**해결책**: 항상 트레이스 속성 포함
 ```python
 agent = Agent(
     model=model,
@@ -1083,11 +1086,11 @@ agent = Agent(
 )
 ```
 
-### Error: High latency in trace delivery
+### 오류: 트레이스 전달 지연 시간 높음
 
-**Cause**: Traces are batched and sent periodically
+**원인**: 트레이스가 배치로 주기적으로 전송됨
 
-**Solution**: For real-time debugging, flush manually
+**해결책**: 실시간 디버깅 시 수동으로 flush
 ```python
 from langfuse import get_client
 langfuse = get_client()
@@ -1096,27 +1099,27 @@ langfuse.flush()
 
 ---
 
-## References
+## 참고 자료
 
-### Official Documentation
+### 공식 문서
 
-- [Langfuse + Amazon Bedrock Integration](https://langfuse.com/integrations/model-providers/amazon-bedrock)
+- [Langfuse + Amazon Bedrock 통합](https://langfuse.com/integrations/model-providers/amazon-bedrock)
 - [Langfuse + Amazon Bedrock AgentCore](https://langfuse.com/integrations/frameworks/amazon-agentcore)
 - [Langfuse + Strands Agents](https://langfuse.com/integrations/frameworks/strands-agents)
-- [AWS Blog: AgentCore Observability with Langfuse](https://aws.amazon.com/blogs/machine-learning/amazon-bedrock-agentcore-observability-with-langfuse/)
+- [AWS 블로그: Langfuse와 AgentCore 관측성](https://aws.amazon.com/blogs/machine-learning/amazon-bedrock-agentcore-observability-with-langfuse/)
 
-### Sample Code
+### 샘플 코드
 
-- [AgentCore Samples - Langfuse Notebook](https://github.com/awslabs/amazon-bedrock-agentcore-samples/blob/main/01-tutorials/06-AgentCore-observability/04-Agentcore-runtime-partner-observability/Langfuse/runtime_with_strands_and_langfuse.ipynb)
-- [Strands Agents Observability Sample](https://github.com/strands-agents/samples/blob/main/01-tutorials/01-fundamentals/08-observability-and-evaluation/Observability-and-Evaluation-sample.ipynb)
-- [Langfuse Docs - AWS Strands Agents Cookbook](https://github.com/langfuse/langfuse-docs/blob/main/cookbook/integration_aws_strands_agents.ipynb)
+- [AgentCore 샘플 - Langfuse 노트북](https://github.com/awslabs/amazon-bedrock-agentcore-samples/blob/main/01-tutorials/06-AgentCore-observability/04-Agentcore-runtime-partner-observability/Langfuse/runtime_with_strands_and_langfuse.ipynb)
+- [Strands Agents 관측성 샘플](https://github.com/strands-agents/samples/blob/main/01-tutorials/01-fundamentals/08-observability-and-evaluation/Observability-and-Evaluation-sample.ipynb)
+- [Langfuse 문서 - AWS Strands Agents 쿡북](https://github.com/langfuse/langfuse-docs/blob/main/cookbook/integration_aws_strands_agents.ipynb)
 
-### Self-hosted Deployment
+### Self-hosted 배포
 
-- [Deploy Langfuse on ECS with Fargate](https://github.com/gonsoomoon-ml/deploy-langfuse-on-ecs-with-fargate) - AWS Fargate에 Langfuse 배포 가이드
+- [AWS Fargate에 Langfuse 배포](https://github.com/gonsoomoon-ml/deploy-langfuse-on-ecs-with-fargate) - AWS Fargate에 Langfuse 배포 가이드
 
-### Related Documentation
+### 관련 문서
 
-- [Amazon Bedrock AgentCore Documentation](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/)
+- [Amazon Bedrock AgentCore 문서](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/)
 - [OpenTelemetry Python SDK](https://opentelemetry.io/docs/languages/python/)
-- [Langfuse OpenTelemetry Integration](https://langfuse.com/docs/integrations/opentelemetry)
+- [Langfuse OpenTelemetry 통합](https://langfuse.com/docs/integrations/opentelemetry)
